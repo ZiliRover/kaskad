@@ -1,0 +1,19 @@
+# deps / build
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# secrets and local state
+.env
+.env.local
+.pgdata/
+storage/
+
+# desktop prototype build artifacts and local data
+prototype/build/
+prototype/dist/
+prototype/installer/
+prototype/web/outputs/
+prototype/settings.json
+__pycache__/

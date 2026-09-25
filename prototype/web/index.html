@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seedance Studio</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="titlebar pywebview-drag-region">
+  <div class="tb-left">
+    <span class="logo-mark"></span>
+    <span class="tb-title">Seedance Studio</span>
+  </div>
+  <div class="tb-right">
+    <div class="spend-chips">
+      <span class="chip" id="chip-balance" title="Баланс OpenRouter">Баланс <b>—</b></span>
+      <span class="chip" id="chip-session" title="Потрачено за эту сессию">Сессия <b>$0.00</b></span>
+      <span class="chip" id="chip-total" title="Потрачено за всё время из этого приложения">Всего <b>$0.00</b></span>
+    </div>
+    <button class="tb-btn" id="btn-settings" title="Настройки">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="currentColor" stroke-width="1.2"/><path d="M6.4 1.5h2.2l.3 1.6.9.4 1.4-.9 1.5 1.5-.9 1.4.4.9 1.6.3v2.2l-1.6.3-.4.9.9 1.4-1.5 1.5-1.4-.9-.9.4-.3 1.6H6.4l-.3-1.6-.9-.4-1.4.9-1.5-1.5.9-1.4-.4-.9-1.6-.3V6.4l1.6-.3.4-.9-.9-1.4 1.5-1.5 1.4.9.9-.4.3-1.6Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="win-controls">
+      <button class="tb-btn" id="win-min" title="Свернуть"><svg width="11" height="11" viewBox="0 0 11 11"><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <button class="tb-btn" id="win-max" title="Развернуть"><svg width="11" height="11" viewBox="0 0 11 11"><rect x="1.5" y="1.5" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+      <button class="tb-btn tb-close" id="win-close" title="Закрыть"><svg width="11" height="11" viewBox="0 0 11 11"><path d="M1.5 1.5 9.5 9.5 M9.5 1.5 1.5 9.5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="workspace">
+  <aside class="sidebar">
+    <div class="side-head">Ноды</div>
+    <div class="node-list" id="node-list"></div>
+    <button class="btn-run-all" id="btn-run-all">Запустить всё</button>
+    <div class="side-foot">
+      <div class="hint-row">Перетащи ноду на холст или кликни по ней</div>
+      <div class="hint-row">Соединяй порты перетаскиванием</div>
+      <div class="hint-row">ЛКМ по фону: панорама. Колесо: зум. Delete: удалить</div>
+    </div>
+  </aside>
+
+  <main class="canvas" id="canvas">
+    <div class="world" id="world">
+      <svg class="edges" id="edges" width="0" height="0"></svg>
+      <div class="nodes" id="nodes"></div>
+    </div>
+    <div class="zoom-chip">
+      <button id="zoom-out" title="Отдалить">&minus;</button>
+      <span id="zoom-label">100%</span>
+      <button id="zoom-in" title="Приблизить">+</button>
+      <button id="zoom-fit" title="Сбросить вид">1:1</button>
+    </div>
+  </main>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<div class="modal-overlay" id="settings-modal" hidden>
+  <div class="modal">
+    <div class="modal-head">Настройки</div>
+    <label class="field">
+      <span class="field-label">Ключ OpenRouter API</span>
+      <input type="password" id="input-key" placeholder="sk-or-v1-..." autocomplete="off">
+      <span class="field-help" id="key-status">Ключ не задан</span>
+    </label>
+    <div class="modal-row">
+      <span class="field-help">Ключ хранится локально в settings.json. Баланс и стоимость каждой генерации приходят из OpenRouter.</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-close-settings">Закрыть</button>
+      <button class="btn primary" id="btn-save-key">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="lightbox" hidden>
+  <img id="lightbox-img" alt="Просмотр изображения">
+</div>
+
+<script src="catalog.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

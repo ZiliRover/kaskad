@@ -7,7 +7,12 @@ export function Toasts() {
   const toasts = useStudio((s) => s.toasts);
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => <div key={t.id} className={`toast${t.error ? " is-error" : ""}`}>{t.text}</div>)}
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast${t.error ? " is-error" : ""}${t.action ? " has-action" : ""}`}>
+          <span>{t.text}</span>
+          {t.action && <button type="button" className="toast-action" onClick={t.action.run}>{t.action.label}</button>}
+        </div>
+      ))}
     </div>
   );
 }

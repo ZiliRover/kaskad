@@ -10,13 +10,14 @@ import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
 import { defaultParams, getModel, modelsOfKind, reconcileParams } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
+import { formatRub, type Fx } from "@/lib/money";
 
 export type PromptNodeT = Node<PromptData, "prompt">;
 export type ImageNodeT = Node<ImageData, "image">;
 export type ModelNodeT = Node<ModelData, "model">;
 export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT;
 
-export interface Toast { id: number; text: string; error?: boolean }
+export interface Toast { id: number; text: string; error?: boolean; action?: { label: string; run: () => void } }
 export interface ConfirmRequest { title: string; body: string; confirm: string; resolve: (ok: boolean) => void }
 
 interface StudioStore {
@@ -32,8 +33,11 @@ interface StudioStore {
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   lightbox: string | null;
+  fx: Fx;
+  /** last deletion, restorable with Ctrl+Z or the toast button */
+  trash: { nodes: StudioNode[]; edges: Edge[] } | null;
 
-  init(graphId: string, doc: GraphDoc, state: GraphState): void;
+  init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
   onEdgesChange(changes: EdgeChange[]): void;
   onConnect(c: Connection): void;
@@ -44,7 +48,9 @@ interface StudioStore {
   setModel(id: string, modelId: string): void;
   removeNode(id: string): void;
   setState(s: GraphState): void;
-  toast(text: string, error?: boolean): void;
+  toast(text: string, error?: boolean, action?: Toast["action"]): void;
+  undoDelete(): void;
+  cancel(nodeId: string): Promise<void>;
   ask(req: Omit<ConfirmRequest, "resolve">): Promise<boolean>;
   closeConfirm(ok: boolean): void;
   setLightbox(url: string | null): void;
@@ -187,6 +193,15 @@ function ensurePolling() {
 
 let toastSeq = 0;
 
+/** Keep what was just deleted so it can be restored (Ctrl+Z or the toast button). */
+export function remember(nodes: StudioNode[], edges: Edge[]) {
+  const s = useStudio.getState();
+  if (!nodes.length && !edges.length) return;
+  useStudio.setState({ trash: { nodes, edges } });
+  const what = nodes.length > 1 ? `Удалено нод: ${nodes.length}` : nodes.length ? "Нода удалена" : "Связь удалена";
+  s.toast(what, false, { label: "Вернуть", run: () => useStudio.getState().undoDelete() });
+}
+
 export const useStudio = create<StudioStore>((set, get) => ({
   graphId: "",
   nodes: [],
@@ -198,10 +213,12 @@ export const useStudio = create<StudioStore>((set, get) => ({
   toasts: [],
   confirm: null,
   lightbox: null,
+  fx: { usdRub: 85, date: "", source: "fallback" },
+  trash: null,
 
-  init(graphId, doc, state) {
+  init(graphId, doc, state, fx) {
     const { nodes, edges } = fromDoc(doc);
-    set({ graphId, nodes, edges, viewport: doc.viewport ?? { x: 80, y: 80, zoom: 1 }, state });
+    set({ graphId, nodes, edges, viewport: doc.viewport ?? { x: 80, y: 80, zoom: 1 }, state, fx });
     if (Object.keys(state).some((id) => isActive(state, id))) ensurePolling();
   },
 
@@ -290,6 +307,8 @@ export const useStudio = create<StudioStore>((set, get) => ({
   },
 
   removeNode(id) {
+    const { nodes, edges } = get();
+    remember(nodes.filter((n) => n.id === id), edges.filter((e) => e.source === id || e.target === id));
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
@@ -301,10 +320,44 @@ export const useStudio = create<StudioStore>((set, get) => ({
     set({ state });
   },
 
-  toast(text, error) {
+  toast(text, error, action) {
     const id = ++toastSeq;
-    set((s) => ({ toasts: [...s.toasts, { id, text, error }] }));
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), error ? 6000 : 3200);
+    set((s) => ({ toasts: [...s.toasts, { id, text, error, action }] }));
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), error || action ? 6000 : 3200);
+  },
+
+  undoDelete() {
+    const t = get().trash;
+    if (!t) return;
+    set((s) => {
+      const ids = new Set(s.nodes.map((n) => n.id));
+      const nodes = [...s.nodes, ...t.nodes.filter((n) => !ids.has(n.id)).map((n) => ({ ...n, selected: false }))];
+      const present = new Set(nodes.map((n) => n.id));
+      const edgeIds = new Set(s.edges.map((e) => e.id));
+      const edges = [...s.edges, ...t.edges.filter((e) => !edgeIds.has(e.id) && present.has(e.source) && present.has(e.target))];
+      return { nodes, edges, trash: null, toasts: s.toasts.filter((x) => !x.action) };
+    });
+    scheduleSave();
+  },
+
+  async cancel(nodeId) {
+    const job = get().state[nodeId]?.job;
+    if (!job || !isActive(get().state, nodeId)) return;
+    if (job.status === "running" && get().nodes.find((n) => n.id === nodeId && n.type === "model" && n.data.kind === "video")) {
+      const ok = await get().ask({
+        title: "Остановить генерацию?",
+        body: "Провайдер уже делает это видео. Если остановить, оплату за него могут всё равно списать, а результат не сохранится.",
+        confirm: "Остановить",
+      });
+      if (!ok) return;
+    }
+    try {
+      const r = await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+      if (!r.ok && r.status !== 409) throw new Error();
+    } catch {
+      get().toast("Не удалось отменить. Проверьте соединение.", true);
+    }
+    await refreshState();
   },
 
   ask(req) {
@@ -339,7 +392,9 @@ export const useStudio = create<StudioStore>((set, get) => ({
 
     // anything beyond "the node I clicked" spends money the user didn't point at: confirm
     if (plan.jobs.length > 1) {
-      const price = plan.totalUsd > 0 ? `${plan.approx ? "≈ " : ""}$${plan.totalUsd.toFixed(2)}` : "цена будет известна после запуска";
+      const price = plan.totalUsd > 0
+        ? `${plan.approx ? "примерно " : ""}${formatRub(plan.totalUsd, get().fx)}`
+        : "станет известна после запуска";
       const ok = await get().ask({
         title: mode === "all" ? "Запустить весь граф?" : "Запустить цепочку?",
         body: `Будет запущено нод: ${plan.jobs.length}. Стоимость: ${price}.`,

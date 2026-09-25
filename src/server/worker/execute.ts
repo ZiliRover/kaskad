@@ -3,7 +3,7 @@ import type { InputRef } from "@/lib/jobs";
 import { db, outputs, type JobRow } from "../db";
 import { getProvider, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile } from "../storage";
-import { completeJob, failJob, heartbeat } from "./queue";
+import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
 
 const VIDEO_POLL_MS = 5_000;
 const VIDEO_DEADLINE_MS = 30 * 60_000;
@@ -87,6 +87,7 @@ async function run(job: JobRow) {
   const deadline = (job.startedAt?.getTime() ?? Date.now()) + VIDEO_DEADLINE_MS;
   while (Date.now() < deadline) {
     await sleep(VIDEO_POLL_MS);
+    if (await isCanceled(job.id)) return; // user stopped waiting
     let poll;
     try {
       poll = await provider.pollVideo(externalId);
@@ -102,7 +103,7 @@ async function run(job: JobRow) {
       return;
     }
   }
-  throw new ProviderError("Генерация идёт дольше 30 минут — провайдер не ответил. Запустите ещё раз.");
+  throw new ProviderError("Провайдер не ответил за 30 минут. Запустите ещё раз.");
 }
 
 export async function executeJob(job: JobRow) {

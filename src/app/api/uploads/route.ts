@@ -5,6 +5,11 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function POST(req: Request) {
+  // reject oversized bodies before buffering them (multipart adds a little overhead)
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > MAX_BYTES + 64 * 1024) {
+    return NextResponse.json({ error: "Файл больше 20 МБ" }, { status: 413 });
+  }
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "Файл не получен" }, { status: 400 });

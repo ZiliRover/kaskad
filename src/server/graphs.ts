@@ -1,8 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { defaultParams, getModel } from "@/lib/models/registry";
 import type { GraphDoc } from "@/lib/graph/types";
-import type { GraphState, JobStatus, NodeState } from "@/lib/jobs";
-import { db, graphs } from "./db";
+import type { GraphState, JobStatus, NodeState, OutputVersion } from "@/lib/jobs";
+import { db, graphs, jobs, outputs } from "./db";
 import { fileUrl } from "./storage";
 
 export const DEFAULT_GRAPH_ID = "default";
@@ -47,6 +47,32 @@ export async function loadGraph(id: string) {
     .onConflictDoNothing()
     .returning();
   return created ?? (await db.select().from(graphs).where(eq(graphs.id, id)))[0];
+}
+
+export async function graphExists(id: string): Promise<boolean> {
+  const [row] = await db.select({ id: graphs.id }).from(graphs).where(eq(graphs.id, id));
+  return !!row;
+}
+
+export async function listOutputs(graphId: string, nodeId: string): Promise<OutputVersion[]> {
+  const rows = await db.select({
+    id: outputs.id, kind: outputs.kind, fileKey: outputs.fileKey, mime: outputs.mime,
+    text: outputs.text, createdAt: outputs.createdAt, costUsd: jobs.costUsd,
+  })
+    .from(outputs)
+    .innerJoin(jobs, eq(jobs.id, outputs.jobId))
+    .where(and(eq(outputs.graphId, graphId), eq(outputs.nodeId, nodeId)))
+    .orderBy(desc(outputs.createdAt))
+    .limit(100);
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    url: r.fileKey ? fileUrl(r.fileKey) : null,
+    mime: r.mime,
+    text: r.text,
+    createdAt: iso(r.createdAt)!,
+    costUsd: r.costUsd === null ? null : Number(r.costUsd),
+  }));
 }
 
 export async function saveGraph(id: string, doc: GraphDoc) {

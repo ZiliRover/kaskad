@@ -60,37 +60,66 @@ export async function heartbeat(jobId: string, externalId?: string) {
 export async function completeJob(
   job: JobRow, result: { fileKey?: string; mime?: string; text?: string; costUsd: number | null },
 ) {
+  const cost = result.costUsd === null ? null : String(result.costUsd);
   await db.transaction(async (tx) => {
-    await tx.execute(sql`
-      insert into outputs (graph_id, node_id, job_id, kind, file_key, mime, text)
-      values (${job.graphId}, ${job.nodeId}, ${job.id}, ${job.kind},
-              ${result.fileKey ?? null}, ${result.mime ?? null}, ${result.text ?? null})
+    // only a still-running job may succeed: a result arriving after cancel is discarded
+    const done = await tx.execute(sql`
+      update jobs set status = 'succeeded', finished_at = now(), error = null, cost_usd = ${cost}
+      where id = ${job.id} and status = 'running'
+      returning id
     `);
-    await tx.execute(sql`
-      update jobs set status = 'succeeded', finished_at = now(), error = null,
-                      cost_usd = ${result.costUsd === null ? null : String(result.costUsd)}
-      where id = ${job.id}
-    `);
+    if (done.length) {
+      await tx.execute(sql`
+        insert into outputs (graph_id, node_id, job_id, kind, file_key, mime, text)
+        values (${job.graphId}, ${job.nodeId}, ${job.id}, ${job.kind},
+                ${result.fileKey ?? null}, ${result.mime ?? null}, ${result.text ?? null})
+      `);
+    } else {
+      // canceled mid-flight, but the provider still billed it: keep spend accounting honest
+      await tx.execute(sql`update jobs set cost_usd = ${cost} where id = ${job.id} and status = 'canceled'`);
+    }
   });
 }
 
 export async function failJob(job: JobRow, error: string) {
-  await db.execute(sql`
-    update jobs set status = 'failed', finished_at = now(), error = ${error} where id = ${job.id}
+  const r = await db.execute(sql`
+    update jobs set status = 'failed', finished_at = now(), error = ${error}
+    where id = ${job.id} and status = 'running'
+    returning id
   `);
-  await skipDependents(job);
+  if (r.length) await skipDependents(job, "failed");
 }
 
-/** Queued jobs waiting on a failed job can never run: tell the user why, all the way down the chain. */
-async function skipDependents(failed: Pick<JobRow, "id" | "modelId">) {
-  const name = getModel(failed.modelId)?.name ?? failed.modelId;
+export async function isCanceled(jobId: string): Promise<boolean> {
+  const r = await db.execute<RawJob>(sql`select status from jobs where id = ${jobId}`);
+  return r[0]?.status === "canceled";
+}
+
+/**
+ * Stop a queued or running job. Queued jobs never reach the provider (free);
+ * a running one stops being waited for, though the provider may still bill it.
+ */
+export async function cancelJob(jobId: string): Promise<"canceled" | "not-active"> {
   const rows = await db.execute<RawJob>(sql`
-    update jobs set status = 'skipped', finished_at = now(),
-                    error = ${`Не выполнилась входная нода «${name}»`}
-    where status = 'queued' and ${failed.id}::uuid = any(depends_on)
+    update jobs set status = 'canceled', finished_at = now(), error = 'Отменено'
+    where id = ${jobId} and status in ('queued', 'running')
     returning id, model_id
   `);
-  for (const r of rows) await skipDependents({ id: r.id as string, modelId: r.model_id as string });
+  if (!rows.length) return "not-active";
+  await skipDependents({ id: jobId, modelId: rows[0].model_id as string }, "canceled");
+  return "canceled";
+}
+
+/** Queued jobs waiting on a dead job can never run: tell the user why, all the way down the chain. */
+async function skipDependents(dead: Pick<JobRow, "id" | "modelId">, why: "failed" | "canceled") {
+  const name = getModel(dead.modelId)?.name ?? dead.modelId;
+  const reason = why === "canceled" ? `Входная нода «${name}» отменена` : `Не выполнилась входная нода «${name}»`;
+  const rows = await db.execute<RawJob>(sql`
+    update jobs set status = 'skipped', finished_at = now(), error = ${reason}
+    where status = 'queued' and ${dead.id}::uuid = any(depends_on)
+    returning id, model_id
+  `);
+  for (const r of rows) await skipDependents({ id: r.id as string, modelId: r.model_id as string }, why);
 }
 
 /**

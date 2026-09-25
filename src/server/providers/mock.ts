@@ -40,7 +40,7 @@ function placeholderSvg(prompt: string, aspect: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${a} 45% 22%)"/><stop offset="1" stop-color="hsl(${b} 55% 38%)"/></linearGradient></defs>
 <rect width="100%" height="100%" fill="url(#g)"/>
-<text x="56" y="80" font-family="monospace" font-size="20" fill="rgba(255,255,255,.55)">MOCK · тестовая генерация</text>
+<text x="56" y="80" font-family="monospace" font-size="20" fill="rgba(255,255,255,.55)">Тестовая генерация</text>
 ${text}</svg>`;
 }
 

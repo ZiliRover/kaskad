@@ -6,7 +6,7 @@ import {
 } from "@xyflow/react";
 import { useCallback } from "react";
 import type { MediaKind } from "@/lib/models/types";
-import { canConnect, useStudio, type ImageNodeT, type StudioNode } from "./store";
+import { canConnect, remember, useStudio, type ImageNodeT, type StudioNode } from "./store";
 import { firstImageFile, uploadImage } from "./upload";
 import { ImageNode } from "./nodes/ImageNode";
 import { ModelNode } from "./nodes/ModelNode";
@@ -58,6 +58,7 @@ export function Canvas() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onDelete={({ nodes: n, edges: e }) => remember(n, e)}
       isValidConnection={isValidConnection}
       defaultViewport={viewport}
       onMoveEnd={(_, v) => setViewport(v)}

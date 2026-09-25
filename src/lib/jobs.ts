@@ -37,3 +37,14 @@ export interface NodeState {
 }
 
 export type GraphState = Record<string, NodeState>;
+
+/** One entry of a node's version history. */
+export interface OutputVersion {
+  id: string;
+  kind: "text" | "image" | "video";
+  url: string | null;
+  mime: string | null;
+  text: string | null;
+  createdAt: string;
+  costUsd: number | null;
+}

@@ -11,13 +11,17 @@ export const jobStatus = pgEnum("job_status", [
 
 export const mediaKind = pgEnum("media_kind", ["text", "image", "video"]);
 
-/** A canvas document. Owned by a user once accounts land. */
+/** A canvas document. */
 export const graphs = pgTable("graphs", {
   id: text("id").primaryKey(),
+  /** set once accounts land; null = the pre-accounts shared graph */
+  ownerId: text("owner_id"),
   name: text("name").notNull(),
   doc: jsonb("doc").$type<GraphDoc>().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("graphs_owner_idx").on(t.ownerId, t.updatedAt),
+]);
 
 /** One press of "run": a set of jobs planned together. */
 export const runs = pgTable("runs", {

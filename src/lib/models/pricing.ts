@@ -97,6 +97,9 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
   const refs = ctx.inputCounts.references ?? 0;
   const inLine = lines.find((l) => l.billable === "input_image" && l.unit === "image");
   if (refs && inLine) usd += refs * inLine.cost_usd;
+  // some models also bill the prompt itself (~4 characters per token)
+  const textLine = lines.find((l) => l.billable === "input_text" && l.unit === "token");
+  if (textLine) { usd += ((ctx.promptChars ?? 400) / 4) * textLine.cost_usd; approx = true; }
   return { usd, approx };
 }
 
@@ -109,7 +112,3 @@ export function estimate(spec: ModelSpec, ctx: EstimateContext): Estimate {
   return { usd: inTok * p.prompt + 600 * p.completion, approx: true };
 }
 
-export function formatUsd(v: number): string {
-  if (v > 0 && v < 0.01) return "<$0.01";
-  return "$" + v.toFixed(2);
-}

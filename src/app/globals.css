@@ -1,5 +1,8 @@
-/* Kaskad studio — locked dark theme (a creative canvas tool), one lime accent,
-   semantic data-type colors: text = sky, image = amber, video = rose. */
+/* Kaskad studio. Locked dark theme (a creative canvas tool), one lime accent,
+   semantic data-type colors: text = sky, image = amber, video = rose.
+   Radius rule: containers (nodes, dialogs) 12px, controls 8px, controls nested
+   inside controls 6px, pills only for status (badge, switch). Handles are round.
+   Contrast: every text token passes WCAG AA (4.5:1) on --panel and --panel-2. */
 
 :root {
   color-scheme: dark;
@@ -11,7 +14,7 @@
   --line-2: #343640;
   --text: #e7e9ee;
   --text-2: #9ba0ab;
-  --text-3: #6b707a;
+  --text-3: #878c96;
   --accent: #d7f75b;
   --accent-hover: #c5e64a;
   --accent-ink: #171a06;
@@ -123,7 +126,7 @@ button:disabled { cursor: default; }
 }
 .palette-item:hover { border-color: var(--line-2); background: var(--panel-3); }
 .palette-item:active { cursor: grabbing; }
-.palette-item .dot { margin-top: 5px; }
+.palette-item .type-icon { margin-top: 1px; }
 .pi-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pi-title { font-weight: 600; font-size: 13px; }
 .pi-desc { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -140,10 +143,10 @@ button:disabled { cursor: default; }
   line-height: 1.5;
 }
 
-.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.dot-text { background: var(--t-text); }
-.dot-image { background: var(--t-image); }
-.dot-video { background: var(--t-video); }
+.type-icon { flex: none; }
+.t-text { color: var(--t-text); }
+.t-image { color: var(--t-image); }
+.t-video { color: var(--t-video); }
 
 /* ---------------------------------------------------------------- buttons & fields */
 
@@ -176,19 +179,12 @@ button:disabled { cursor: default; }
   border-radius: 6px;
   color: var(--text-3);
 }
-.icon-btn:hover { color: var(--text); background: var(--panel-3); }
+.icon-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-3); }
+.icon-btn:disabled { opacity: .35; }
 
 .link-btn { font-size: 12px; color: var(--text-2); text-decoration: none; padding: 2px 0; }
 .link-btn:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 
-.spinner {
-  width: 11px; height: 11px;
-  border-radius: 50%;
-  border: 1.6px solid currentColor;
-  border-right-color: transparent;
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .field {
   width: 100%;
@@ -311,7 +307,7 @@ textarea.field { resize: vertical; min-height: 56px; display: block; }
 }
 .node-head:active { cursor: grabbing; }
 .node-title { flex: 1; font-weight: 600; font-size: 12.5px; }
-.node.is-busy .node-head .dot { animation: pulse 1.2s ease-in-out infinite; }
+.node.is-busy .node-head .type-icon { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 
 .node-body { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
@@ -459,6 +455,7 @@ textarea.field { resize: vertical; min-height: 56px; display: block; }
 .drop img { display: block; width: 100%; max-height: 260px; object-fit: contain; background: #0a0b0d; }
 .drop-hint { display: flex; flex-direction: column; gap: 4px; padding: 16px; color: var(--text-3); font-size: 11.5px; }
 .drop-hint strong { color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+.drop-formats { margin-top: 4px; font-size: 11px; }
 .drop-replace {
   position: absolute;
   right: 8px; bottom: 8px;
@@ -499,7 +496,8 @@ video.result-media { object-fit: contain; }
   cursor: text;
 }
 .result-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-.result-version { margin-right: auto; font-size: 11px; color: var(--text-3); }
+.versions { margin-right: auto; display: flex; align-items: center; gap: 2px; }
+.versions-label { min-width: 44px; text-align: center; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
 
 .skeleton {
   width: 100%;
@@ -511,7 +509,7 @@ video.result-media { object-fit: contain; }
 @keyframes shimmer { from { background-position: 130% 0; } to { background-position: -130% 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton, .spinner, .node.is-busy .node-head .dot { animation: none; }
+  .skeleton, .node.is-busy .node-head .type-icon { animation: none; }
 }
 
 /* ---------------------------------------------------------------- overlays */
@@ -539,6 +537,9 @@ video.result-media { object-fit: contain; }
   animation: toast-in .18s ease-out;
 }
 .toast.is-error { color: var(--danger); border-color: rgba(240, 113, 110, .45); }
+.toast.has-action { display: flex; align-items: center; gap: 14px; pointer-events: auto; }
+.toast-action { font-weight: 600; color: var(--accent); padding: 2px 0; }
+.toast-action:hover { text-decoration: underline; text-underline-offset: 3px; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
 
 .overlay {

@@ -4,9 +4,12 @@ import { useReactFlow } from "@xyflow/react";
 import { modelsOfKind } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
 import { PALETTE_MIME } from "./Canvas";
+import { NodeIcon, type NodeKey } from "./icons";
 import { useStudio, type StudioNode } from "./store";
 
 interface Item { type: StudioNode["type"]; kind?: MediaKind; title: string; desc: string; dot: MediaKind }
+
+const iconKey = (it: Item): NodeKey => (it.type === "model" ? `model:${it.kind ?? "image"}` : it.type);
 
 const examples = (kind: MediaKind) => modelsOfKind(kind).slice(0, 3).map((m) => m.name).join(", ");
 
@@ -23,7 +26,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { type: "model", kind: "image", title: "Картинка", desc: examples("image"), dot: "image" },
       { type: "model", kind: "video", title: "Видео", desc: examples("video"), dot: "video" },
-      { type: "model", kind: "text", title: "Текст · AI", desc: "Промты, описания, перевод", dot: "text" },
+      { type: "model", kind: "text", title: "Текст (AI)", desc: "Промты, описания, перевод", dot: "text" },
     ],
   },
 ];
@@ -58,7 +61,7 @@ export function Sidebar() {
               }}
               onClick={() => addAtCenter(it)}
             >
-              <span className={`dot dot-${it.dot}`} aria-hidden />
+              <NodeIcon node={iconKey(it)} dtype={it.dot} />
               <span className="pi-text">
                 <span className="pi-title">{it.title}</span>
                 <span className="pi-desc">{it.desc}</span>
@@ -68,8 +71,8 @@ export function Sidebar() {
         </section>
       ))}
       <div className="side-foot">
-        <p>Соединяй выходы и входы одного цвета: голубой — текст, жёлтый — картинка, розовый — видео.</p>
-        <p>Пробел или ЛКМ по фону — двигать холст, колесо — масштаб, Delete — удалить.</p>
+        <p>Соединяй выход и вход одного цвета. Голубой: текст, жёлтый: картинка, розовый: видео.</p>
+        <p>Холст двигается мышью или с зажатым пробелом, масштаб колесом. Delete удаляет, Ctrl+Z возвращает.</p>
       </div>
     </aside>
   );

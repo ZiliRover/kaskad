@@ -1,12 +1,12 @@
 "use client";
 
 import type { NodeProps } from "@xyflow/react";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { useStudio, type ImageNodeT } from "../store";
 import { fileUrl, firstImageFile, uploadImage } from "../upload";
 import { NodeShell } from "./NodeShell";
 
-export function ImageNode({ id, data, selected }: NodeProps<ImageNodeT>) {
+export const ImageNode = memo(function ImageNode({ id, data, selected }: NodeProps<ImageNodeT>) {
   const updateData = useStudio((s) => s.updateData);
   const toast = useStudio((s) => s.toast);
   const input = useRef<HTMLInputElement>(null);
@@ -27,7 +27,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ImageNodeT>) {
   }
 
   return (
-    <NodeShell id={id} title="Изображение" dtype="image" selected={selected} busy={busy}>
+    <NodeShell id={id} title="Изображение" icon="image" dtype="image" selected={selected} busy={busy}>
       <button
         type="button"
         className={`drop nodrag${data.fileKey ? " has-image" : ""}${over ? " is-over" : ""}`}
@@ -43,11 +43,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ImageNodeT>) {
             <span className="drop-replace">Заменить</span>
           </>
         ) : busy ? (
-          <span className="drop-hint">Загрузка…</span>
+          <span className="drop-hint">Загружаю…</span>
         ) : (
           <span className="drop-hint">
             <strong>Загрузить картинку</strong>
-            <span>или перетащи файл сюда · PNG, JPEG, WebP</span>
+            <span>или перетащи файл сюда</span>
+            <span className="drop-formats">PNG, JPEG, WebP до 20 МБ</span>
           </span>
         )}
       </button>
@@ -60,4 +61,4 @@ export function ImageNode({ id, data, selected }: NodeProps<ImageNodeT>) {
       />
     </NodeShell>
   );
-}
+});

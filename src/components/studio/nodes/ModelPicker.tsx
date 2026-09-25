@@ -1,5 +1,6 @@
 "use client";
 
+import { CaretDownIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { getModel, modelsOfKind } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
@@ -36,7 +37,7 @@ export function ModelPicker({ kind, value, onChange }: Props) {
       >
         <span className="picker-name">{current?.name ?? "Модель недоступна"}</span>
         <span className="picker-vendor">{current?.vendor}</span>
-        <svg className="chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <CaretDownIcon className="chev" size={12} weight="bold" aria-hidden />
       </button>
       {current && <div className="picker-blurb">{current.blurb}</div>}
       {open && (

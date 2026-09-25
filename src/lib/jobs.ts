@@ -4,7 +4,7 @@ import type { ParamValue } from "./models/types";
 export type InputRef =
   | { type: "text"; text: string }
   | { type: "file"; key: string }
-  | { type: "node"; nodeId: string };
+  | { type: "node"; nodeId: string; outputId?: string };
 
 export interface JobInput {
   ports: Record<string, InputRef[]>;
@@ -34,6 +34,8 @@ export interface NodeState {
     createdAt: string;
   } | null;
   outputCount: number;
+  /** all results of the latest successful run when it produced several variants */
+  batch: { id: string; url: string | null }[];
 }
 
 export type GraphState = Record<string, NodeState>;

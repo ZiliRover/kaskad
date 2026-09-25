@@ -3,7 +3,7 @@
 import { XIcon } from "@phosphor-icons/react";
 import { Handle, Position } from "@xyflow/react";
 import type { ReactNode } from "react";
-import type { MediaKind } from "@/lib/models/types";
+import type { DType } from "@/lib/models/types";
 import { NodeIcon, type NodeKey } from "../icons";
 import { useStudio } from "../store";
 
@@ -11,22 +11,25 @@ interface Props {
   id: string;
   title: string;
   icon: NodeKey;
-  dtype: MediaKind;
+  dtype: DType;
   selected?: boolean;
   busy?: boolean;
   wide?: boolean;
   children: ReactNode;
   footer?: ReactNode;
+  /** extra header controls, left of the close button */
+  actions?: ReactNode;
 }
 
 /** Common frame: draggable header with the output handle, body, optional footer. */
-export function NodeShell({ id, title, icon, dtype, selected, busy, wide, children, footer }: Props) {
+export function NodeShell({ id, title, icon, dtype, selected, busy, wide, children, footer, actions }: Props) {
   const removeNode = useStudio((s) => s.removeNode);
   return (
     <div className={`node${wide ? " node-wide" : ""}${selected ? " is-selected" : ""}${busy ? " is-busy" : ""}`}>
       <div className="node-head">
         <NodeIcon node={icon} dtype={dtype} />
         <span className="node-title">{title}</span>
+        {actions}
         <button
           type="button"
           className="icon-btn node-close nodrag"

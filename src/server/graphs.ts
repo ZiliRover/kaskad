@@ -94,6 +94,7 @@ interface StateRow extends Record<string, unknown> {
   text: string | null;
   output_created: Date | null;
   output_count: number;
+  batch: { id: string; file_key: string | null }[] | null;
 }
 
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString() : null);
@@ -111,13 +112,22 @@ export async function graphState(graphId: string): Promise<GraphState> {
       order by node_id, created_at desc
     ), oc as (
       select node_id, count(*)::int as n from outputs where graph_id = ${graphId} group by node_id
+    ), lsj as (
+      select distinct on (node_id) node_id, id
+      from jobs where graph_id = ${graphId} and status = 'succeeded'
+      order by node_id, created_at desc
+    ), b as (
+      select o.node_id, json_agg(json_build_object('id', o.id, 'file_key', o.file_key) order by o.created_at, o.id) as batch
+      from outputs o join lsj on lsj.id = o.job_id
+      group by o.node_id having count(*) > 1
     )
     select coalesce(lj.node_id, lo.node_id) as node_id,
            lj.id as job_id, lj.status, lj.error, lj.cost_usd, lj.created_at as job_created, lj.started_at,
            lo.id as output_id, lo.kind, lo.file_key, lo.mime, lo.text, lo.created_at as output_created,
-           coalesce(oc.n, 0) as output_count
+           coalesce(oc.n, 0) as output_count, b.batch
     from lj full outer join lo on lo.node_id = lj.node_id
     left join oc on oc.node_id = coalesce(lj.node_id, lo.node_id)
+    left join b on b.node_id = coalesce(lj.node_id, lo.node_id)
   `);
 
   const state: GraphState = {};
@@ -140,6 +150,7 @@ export async function graphState(graphId: string): Promise<GraphState> {
         createdAt: iso(r.output_created)!,
       } : null,
       outputCount: r.output_count,
+      batch: (r.batch ?? []).map((x) => ({ id: x.id, url: x.file_key ? fileUrl(x.file_key) : null })),
     };
     state[r.node_id] = s;
   }

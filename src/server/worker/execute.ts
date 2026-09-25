@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
+import { getModel } from "@/lib/models/registry";
 import { db, outputs, type JobRow } from "../db";
 import { getProvider, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile } from "../storage";
@@ -13,9 +14,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 class InputError extends ProviderError {}
 
-async function latestOutput(graphId: string, nodeId: string) {
+/** The result a node passes on: the one the user picked, otherwise the latest. */
+async function nodeOutput(graphId: string, ref: Extract<InputRef, { type: "node" }>) {
+  if (ref.outputId) {
+    const [picked] = await db.select().from(outputs)
+      .where(and(eq(outputs.id, ref.outputId), eq(outputs.graphId, graphId), eq(outputs.nodeId, ref.nodeId)));
+    if (picked) return picked;
+  }
   const [o] = await db.select().from(outputs)
-    .where(and(eq(outputs.graphId, graphId), eq(outputs.nodeId, nodeId)))
+    .where(and(eq(outputs.graphId, graphId), eq(outputs.nodeId, ref.nodeId)))
     .orderBy(desc(outputs.createdAt)).limit(1);
   if (!o) throw new InputError("Входная нода ещё не дала результата");
   return o;
@@ -26,7 +33,7 @@ async function resolveText(job: JobRow, refs: InputRef[] = []): Promise<string> 
   for (const r of refs) {
     if (r.type === "text") parts.push(r.text);
     else if (r.type === "node") {
-      const o = await latestOutput(job.graphId, r.nodeId);
+      const o = await nodeOutput(job.graphId, r);
       if (!o.text) throw new InputError("Входная нода вернула не текст");
       parts.push(o.text);
     }
@@ -34,13 +41,14 @@ async function resolveText(job: JobRow, refs: InputRef[] = []): Promise<string> 
   return parts.join("\n\n").trim();
 }
 
-async function resolveImages(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
+/** Files (images, video, audio) as data URLs, from uploads or upstream results. */
+async function resolveMedia(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
   const urls: string[] = [];
   for (const r of refs) {
     if (r.type === "file") urls.push(await asDataUrl(r.key));
     else if (r.type === "node") {
-      const o = await latestOutput(job.graphId, r.nodeId);
-      if (!o.fileKey) throw new InputError("Входная нода вернула не картинку");
+      const o = await nodeOutput(job.graphId, r);
+      if (!o.fileKey) throw new InputError("Входная нода вернула не файл");
       urls.push(await asDataUrl(o.fileKey));
     }
   }
@@ -57,30 +65,38 @@ async function run(job: JobRow) {
   const provider = getProvider();
   const { ports, params } = job.input;
   const prompt = await resolveText(job, ports.prompt);
-  if (!prompt) throw new InputError("Промт пустой");
+  if (!prompt && !getModel(job.modelId)?.promptOptional) throw new InputError("Промт пустой");
 
   if (job.kind === "image") {
-    const r = await provider.image({ model: job.modelId, prompt, params, references: await resolveImages(job, ports.references) });
-    const key = await store(job, r.bytes, r.mime);
-    await completeJob(job, { fileKey: key, mime: r.mime, costUsd: r.costUsd });
+    const r = await provider.image({ model: job.modelId, prompt, params, references: await resolveMedia(job, ports.references) });
+    const files = [];
+    for (const img of r.images) files.push({ fileKey: await store(job, img.bytes, img.mime), mime: img.mime });
+    await completeJob(job, files, r.costUsd);
     return;
   }
 
   if (job.kind === "text") {
     const r = await provider.text({
-      model: job.modelId, prompt, system: String(params.system ?? ""), images: await resolveImages(job, ports.images),
+      model: job.modelId, prompt, system: String(params.system ?? ""), images: await resolveMedia(job, ports.images),
     });
-    await completeJob(job, { text: r.text, costUsd: r.costUsd });
+    await completeJob(job, [{ text: r.text }], r.costUsd);
     return;
   }
 
   // video: submit once, persist the provider id immediately, then poll
   let externalId = job.externalId;
   if (!externalId) {
-    const [first] = await resolveImages(job, ports.first_frame);
-    const [last] = await resolveImages(job, ports.last_frame);
+    const [first] = await resolveMedia(job, ports.first_frame);
+    const [last] = await resolveMedia(job, ports.last_frame);
+    const [source] = await resolveMedia(job, ports.source);
     ({ externalId } = await provider.submitVideo({
-      model: job.modelId, prompt, params, firstFrame: first ?? null, lastFrame: last ?? null,
+      model: job.modelId, prompt, params,
+      firstFrame: first ?? null,
+      lastFrame: last ?? null,
+      sourceVideo: source ?? null,
+      refImages: await resolveMedia(job, ports.references),
+      refVideos: await resolveMedia(job, ports.ref_videos),
+      refAudio: await resolveMedia(job, ports.ref_audio),
     }));
     await heartbeat(job.id, externalId);
   }
@@ -99,7 +115,7 @@ async function run(job: JobRow) {
     if (poll.state === "done") {
       const media = await provider.downloadVideo(externalId);
       const key = await store(job, media.bytes, media.mime);
-      await completeJob(job, { fileKey: key, mime: media.mime, costUsd: poll.costUsd });
+      await completeJob(job, [{ fileKey: key, mime: media.mime }], poll.costUsd);
       return;
     }
   }

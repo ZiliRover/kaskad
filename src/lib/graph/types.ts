@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DType } from "../models/types";
 
 /**
  * Canvas document. Stored as JSON in `graphs.doc`, validated on every write.
@@ -9,15 +10,19 @@ import { z } from "zod";
 const paramValue = z.union([z.string().max(4000), z.number(), z.boolean()]);
 
 export const promptData = z.object({ text: z.string().max(20000) });
+/** An uploaded file. Historically images only, so `kind` defaults to image. */
 export const imageData = z.object({
   fileKey: z.string().max(300).nullable(),
   name: z.string().max(300),
+  kind: z.enum(["image", "video", "audio"]).optional(),
 });
 export const modelData = z.object({
   kind: z.enum(["text", "image", "video"]),
   modelId: z.string().max(200),
   prompt: z.string().max(20000),
   params: z.record(z.string(), paramValue),
+  /** result chosen to pass downstream; unset = the latest one */
+  pinnedOutputId: z.string().uuid().optional(),
 });
 
 const position = z.object({ x: z.number(), y: z.number() });
@@ -52,9 +57,9 @@ export type GraphDoc = z.infer<typeof graphDoc>;
 
 export type ModelNode = Extract<GraphNode, { type: "model" }>;
 
-/** Output handle of every node type. Model nodes output their own kind. */
-export function outputHandle(node: GraphNode): "text" | "image" | "video" {
+/** Output handle (= data type) of every node. Model nodes output their own kind. */
+export function outputHandle(node: GraphNode): DType {
   if (node.type === "prompt") return "text";
-  if (node.type === "image") return "image";
+  if (node.type === "image") return node.data.kind ?? "image";
   return node.data.kind;
 }

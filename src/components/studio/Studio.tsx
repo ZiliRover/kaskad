@@ -8,6 +8,7 @@ import type { GraphState } from "@/lib/jobs";
 import type { Fx } from "@/lib/money";
 import { Canvas } from "./Canvas";
 import { ConfirmDialog, Lightbox, Toasts } from "./Overlays";
+import { Shortcuts } from "./Shortcuts";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { useStudio } from "./store";
@@ -29,19 +30,6 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
     setReady(true);
   }, [graphId, initialDoc, initialState, fx]);
 
-  // Ctrl+Z / Cmd+Z restores the last deletion (text fields keep their own undo)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.code !== "KeyZ") return; // code, not key: works in the Russian layout too
-      const t = e.target;
-      if (t instanceof Element && t.closest("input, textarea, select, [contenteditable=true]")) return;
-      if (!useStudio.getState().trash) return;
-      e.preventDefault();
-      useStudio.getState().undoDelete();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
     <ReactFlowProvider>
@@ -52,6 +40,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
           <main className="canvas">{ready ? <Canvas /> : null}</main>
         </div>
       </div>
+      <Shortcuts />
       <Toasts />
       <ConfirmDialog />
       <Lightbox />

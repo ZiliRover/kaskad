@@ -108,11 +108,15 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
         <div className="ports">
           {spec.inputs.map((p) => {
             const n = counts[p.key] ?? 0;
+            const needed = n < p.min;
             const meta = n
               ? (p.max > 1 ? `${n} из ${p.max}` : "подключено")
-              : p.key === "prompt" ? "или напиши ниже" : p.max > 1 ? `до ${p.max}` : "необязательно";
+              : p.key === "prompt"
+                ? (spec.promptOptional ? "необязательно" : "или напиши ниже")
+                : needed ? "обязательно"
+                  : [p.hint, p.max > 1 ? `до ${p.max}` : null].filter(Boolean).join(", ") || "необязательно";
             return (
-              <div className={`port-row${n ? " is-wired" : ""}`} key={p.key}>
+              <div className={`port-row${n ? " is-wired" : ""}${needed ? " is-needed" : ""}`} key={p.key}>
                 <Handle type="target" position={Position.Left} id={p.key} className={`handle handle-${p.dtype}`} />
                 <span className="port-label">{p.label}</span>
                 <span className="port-meta">{meta}</span>
@@ -127,7 +131,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
           className="field nodrag nowheel"
           rows={3}
           value={data.prompt}
-          placeholder={PROMPT_HINT[data.kind]}
+          placeholder={spec?.promptOptional ? "Промт (необязательно)" : PROMPT_HINT[data.kind]}
           onChange={(e) => updateData<ModelNodeT>(id, { prompt: e.target.value })}
         />
       )}
@@ -140,7 +144,14 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
         </div>
       )}
 
-      <ResultView nodeId={id} kind={data.kind} node={node} busy={busy} aspect={String(data.params.aspect_ratio ?? "")} />
+      <ResultView
+        nodeId={id}
+        kind={data.kind}
+        node={node}
+        busy={busy}
+        aspect={String(data.params.aspect_ratio ?? "")}
+        pinnedId={data.pinnedOutputId}
+      />
     </NodeShell>
   );
 });

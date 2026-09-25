@@ -1,9 +1,20 @@
 "use client";
 
-const ACCEPTED = ["image/png", "image/jpeg", "image/webp"];
+export type UploadKind = "image" | "video" | "audio";
 
-export async function uploadImage(file: File): Promise<{ key: string; url: string }> {
-  if (!ACCEPTED.includes(file.type)) throw new Error("Поддерживаются PNG, JPEG и WebP");
+const ACCEPT_MIME = [
+  "image/png", "image/jpeg", "image/webp",
+  "video/mp4", "video/webm",
+  "audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/x-m4a", "audio/ogg",
+];
+
+/** `accept` attribute for file inputs */
+export const ACCEPT_ATTR = ACCEPT_MIME.join(",");
+
+export async function uploadFile(file: File): Promise<{ key: string; url: string; kind: UploadKind }> {
+  if (!ACCEPT_MIME.includes(file.type)) {
+    throw new Error("Подходят картинки (PNG, JPEG, WebP), видео (MP4, WebM) и аудио (MP3, WAV, M4A, OGG)");
+  }
   const form = new FormData();
   form.append("file", file);
   const r = await fetch("/api/uploads", { method: "POST", body: form });
@@ -14,8 +25,8 @@ export async function uploadImage(file: File): Promise<{ key: string; url: strin
 
 export const fileUrl = (key: string) => `/api/files/${key}`;
 
-export function firstImageFile(list: FileList | null | undefined): File | null {
-  if (!list) return null;
-  for (const f of Array.from(list)) if (f.type.startsWith("image/")) return f;
-  return null;
+/** Media files from a drop or paste, in order. */
+export function mediaFiles(list: FileList | null | undefined): File[] {
+  if (!list) return [];
+  return Array.from(list).filter((f) => /^(image|video|audio)\//.test(f.type));
 }

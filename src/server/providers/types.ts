@@ -12,6 +12,12 @@ export interface VideoRequest {
   prompt: string;
   firstFrame: string | null;       // data URL
   lastFrame: string | null;
+  /** input_references: guidance assets (images for most models; video/audio for Seedance 2+) */
+  refImages: string[];
+  refVideos: string[];
+  refAudio: string[];
+  /** edit/upscale models: the video being changed */
+  sourceVideo: string | null;
   params: Record<string, ParamValue>;
 }
 
@@ -34,7 +40,8 @@ export type VideoPoll =
 
 export interface Provider {
   readonly mode: "live" | "mock";
-  image(req: ImageRequest): Promise<Media & { costUsd: number | null }>;
+  /** returns one image per requested variant (params.n), possibly fewer */
+  image(req: ImageRequest): Promise<{ images: Media[]; costUsd: number | null }>;
   submitVideo(req: VideoRequest): Promise<{ externalId: string }>;
   pollVideo(externalId: string): Promise<VideoPoll>;
   downloadVideo(externalId: string): Promise<Media>;

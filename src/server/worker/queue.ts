@@ -58,9 +58,9 @@ export async function heartbeat(jobId: string, externalId?: string) {
 }
 
 export async function completeJob(
-  job: JobRow, result: { fileKey?: string; mime?: string; text?: string; costUsd: number | null },
+  job: JobRow, results: { fileKey?: string; mime?: string; text?: string }[], costUsd: number | null,
 ) {
-  const cost = result.costUsd === null ? null : String(result.costUsd);
+  const cost = costUsd === null ? null : String(costUsd);
   await db.transaction(async (tx) => {
     // only a still-running job may succeed: a result arriving after cancel is discarded
     const done = await tx.execute(sql`
@@ -69,11 +69,15 @@ export async function completeJob(
       returning id
     `);
     if (done.length) {
-      await tx.execute(sql`
-        insert into outputs (graph_id, node_id, job_id, kind, file_key, mime, text)
-        values (${job.graphId}, ${job.nodeId}, ${job.id}, ${job.kind},
-                ${result.fileKey ?? null}, ${result.mime ?? null}, ${result.text ?? null})
-      `);
+      // one row per variant, in the order the provider returned them
+      for (const result of results) {
+        await tx.execute(sql`
+          insert into outputs (graph_id, node_id, job_id, kind, file_key, mime, text, created_at)
+          values (${job.graphId}, ${job.nodeId}, ${job.id}, ${job.kind},
+                  ${result.fileKey ?? null}, ${result.mime ?? null}, ${result.text ?? null},
+                  clock_timestamp()) -- now() is frozen per transaction; variants must keep their order
+        `);
+      }
     } else {
       // canceled mid-flight, but the provider still billed it: keep spend accounting honest
       await tx.execute(sql`update jobs set cost_usd = ${cost} where id = ${job.id} and status = 'canceled'`);

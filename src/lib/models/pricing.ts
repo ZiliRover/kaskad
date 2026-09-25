@@ -13,7 +13,7 @@ export interface Estimate {
 
 export interface EstimateContext {
   params: Record<string, ParamValue>;
-  /** number of images connected per input port */
+  /** number of inputs connected per port */
   inputCounts: Record<string, number>;
   /** prompt length in characters, for text models */
   promptChars?: number;
@@ -30,7 +30,9 @@ function ratio(ar: string | undefined): number {
   return Math.max(a, b) / Math.min(a, b);
 }
 
-function videoEstimate(skus: Record<string, string>, ctx: EstimateContext): Estimate {
+function videoEstimate(spec: ModelSpec, skus: Record<string, string>, ctx: EstimateContext): Estimate {
+  // price depends on the length/size of a video we only see at run time (edit, upscale)
+  if (spec.caps.sourceVideo && ctx.params.duration === undefined) return { usd: null, approx: true };
   const res = String(ctx.params.resolution ?? "720p").toLowerCase();
   const dur = Number(ctx.params.duration ?? 5);
   const audio = ctx.params.generate_audio !== false;
@@ -42,7 +44,12 @@ function videoEstimate(skus: Record<string, string>, ctx: EstimateContext): Esti
     const short = SHORT_SIDE[res] ?? 720;
     const pixels = short * Math.round(short * ratio(String(ctx.params.aspect_ratio)));
     const tokens = (pixels * 24 * dur) / 1024;
-    const rate = n(`video_tokens_${res}`) ?? (audio ? n("video_tokens") : n("video_tokens_without_audio") ?? n("video_tokens"))!;
+    // video references switch Seedance to its "with video input" rate
+    const vIn = (ctx.inputCounts.ref_videos ?? 0) > 0;
+    const rate =
+      (vIn ? n(`video_tokens_${res}_with_video_input`) ?? n("video_tokens_with_video_input") : undefined)
+      ?? n(`video_tokens_${res}`)
+      ?? (audio ? n("video_tokens") : n("video_tokens_without_audio") ?? n("video_tokens"))!;
     return { usd: tokens * rate, approx: true };
   }
 
@@ -59,7 +66,8 @@ function videoEstimate(skus: Record<string, string>, ctx: EstimateContext): Esti
   if (perSecond === undefined) return { usd: null, approx: true };
 
   let usd = perSecond * dur;
-  usd += frames * (n("reference_images") ?? div100(n("cents_per_image_input")) ?? 0);
+  const images = frames + (ctx.inputCounts.references ?? 0);
+  usd += images * (n("reference_images") ?? div100(n("cents_per_image_input")) ?? 0);
   const min = div100(n("minimum_cents_per_generation"));
   if (min !== undefined) usd = Math.max(usd, min);
   return { usd, approx: false };
@@ -83,8 +91,10 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
   const outLines = lines.filter((l) => l.billable === "output_image");
   if (!outLines.length) return { usd: null, approx: true };
   const res = String(ctx.params.resolution ?? "").toLowerCase();
+  const quality = String(ctx.params.quality ?? "").toLowerCase();
   const line =
-    outLines.find((l) => l.variant === res)
+    outLines.find((l) => l.variant === `${quality}_${res || "1k"}`)
+    ?? outLines.find((l) => l.variant === res)
     ?? (res === "2k" || res === "4k" ? outLines.find((l) => l.variant === "high_resolution") : undefined)
     ?? outLines.find((l) => !l.variant)
     ?? outLines[0];
@@ -95,8 +105,10 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
   else { usd = line.cost_usd * imageTokens(spec.id, ctx.params); approx = true; }
 
   const refs = ctx.inputCounts.references ?? 0;
-  const inLine = lines.find((l) => l.billable === "input_image" && l.unit === "image");
+  const inLine = lines.find((l) => (l.billable === "input_image" || l.billable === "input_reference") && l.unit === "image");
   if (refs && inLine) usd += refs * inLine.cost_usd;
+  const perRequestRefs = lines.find((l) => l.billable === "input_reference" && l.unit === "request");
+  if (refs && perRequestRefs) usd += perRequestRefs.cost_usd;
   // some models also bill the prompt itself (~4 characters per token)
   const textLine = lines.find((l) => l.billable === "input_text" && l.unit === "token");
   if (textLine) { usd += ((ctx.promptChars ?? 400) / 4) * textLine.cost_usd; approx = true; }
@@ -105,8 +117,13 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
 
 export function estimate(spec: ModelSpec, ctx: EstimateContext): Estimate {
   const p = spec.pricing;
-  if (p.type === "video") return videoEstimate(p.skus, ctx);
-  if (p.type === "image") return imageEstimate(spec, p.lines, ctx);
+  if (p.type === "video") return videoEstimate(spec, p.skus, ctx);
+  if (p.type === "image") {
+    // one run can return several variants, each billed
+    const e = imageEstimate(spec, p.lines, ctx);
+    const variants = Math.max(1, Number(ctx.params.n ?? 1));
+    return e.usd === null ? e : { usd: e.usd * variants, approx: e.approx };
+  }
   // text: assume ~4 chars per token in, ~600 tokens out
   const inTok = Math.max(200, (ctx.promptChars ?? 400) / 4);
   return { usd: inTok * p.prompt + 600 * p.completion, approx: true };

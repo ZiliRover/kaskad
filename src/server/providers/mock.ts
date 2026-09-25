@@ -55,8 +55,12 @@ export const mockProvider: Provider = {
   async image(req) {
     await sleep(1800);
     maybeFail(req.prompt);
-    const svg = placeholderSvg(req.prompt, String(req.params.aspect_ratio ?? "16:9"));
-    return { bytes: new TextEncoder().encode(svg), mime: "image/svg+xml", costUsd: 0 };
+    const n = Math.max(1, Number.parseInt(String(req.params.n ?? 1), 10) || 1);
+    const images = Array.from({ length: n }, (_, i) => ({
+      bytes: new TextEncoder().encode(placeholderSvg(`${req.prompt}${n > 1 ? ` (вариант ${i + 1})` : ""}`, String(req.params.aspect_ratio ?? "16:9"))),
+      mime: "image/svg+xml",
+    }));
+    return { images, costUsd: 0 };
   },
 
   async submitVideo(req) {

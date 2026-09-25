@@ -13,8 +13,12 @@ const ROOT = path.isAbsolute(DIR) ? DIR : path.join(/* turbopackIgnore: true */ 
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif",
   "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm",
+  "audio/mpeg": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a", "audio/ogg": "ogg",
 };
-const MIME_BY_EXT = Object.fromEntries(Object.entries(EXT_BY_MIME).map(([m, e]) => [e, m]));
+// first mime listed for an extension is canonical
+const MIME_BY_EXT: Record<string, string> = {};
+for (const [m, e] of Object.entries(EXT_BY_MIME)) MIME_BY_EXT[e] ??= m;
 
 const KEY_RE = /^(uploads|outputs)\/[a-z0-9-]+(\/[a-z0-9-]+)?\.[a-z0-9]+$/;
 

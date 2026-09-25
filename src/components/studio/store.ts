@@ -8,8 +8,9 @@ import { create } from "zustand";
 import type { GraphDoc, ImageData, ModelData, PromptData } from "@/lib/graph/types";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
-import { defaultParams, getModel, modelsOfKind, reconcileParams } from "@/lib/models/registry";
-import type { MediaKind } from "@/lib/models/types";
+import { defaultModel, defaultParams, getModel, reconcileParams } from "@/lib/models/registry";
+import { uploadFile } from "./upload";
+import type { DType, MediaKind } from "@/lib/models/types";
 import { formatRub, type Fx } from "@/lib/money";
 
 export type PromptNodeT = Node<PromptData, "prompt">;
@@ -42,8 +43,17 @@ interface StudioStore {
   onEdgesChange(changes: EdgeChange[]): void;
   onConnect(c: Connection): void;
   setViewport(v: Viewport): void;
-  /** exact: keep the position (drop at cursor); otherwise nudge to free space */
-  addNode(type: StudioNode["type"], position: { x: number; y: number }, kind?: MediaKind, exact?: boolean): void;
+  /** Adds a node and returns its id. exact: keep the position (drop at cursor); otherwise nudge to free space */
+  addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean }): string;
+  /** Upload files and place one upload node per file, fanned out from `at` */
+  addFiles(files: File[], at: { x: number; y: number }): Promise<void>;
+  /** Fill an upload node; wires the new file type can't feed are removed */
+  setUpload(id: string, file: { fileKey: string; name: string; kind: "image" | "video" | "audio" }): void;
+  /** Choose which result a node passes downstream (null = latest) */
+  pin(id: string, outputId: string | null): void;
+  copySelection(): number;
+  paste(): void;
+  duplicateSelection(): void;
   updateData<T extends StudioNode>(id: string, patch: Partial<T["data"]>): void;
   setModel(id: string, modelId: string): void;
   removeNode(id: string): void;
@@ -85,8 +95,8 @@ export function isActive(state: GraphState, nodeId: string): boolean {
 }
 
 /** Output handle id of a node = its data type. */
-export function outputType(n: StudioNode): MediaKind {
-  return n.type === "prompt" ? "text" : n.type === "image" ? "image" : n.data.kind;
+export function outputType(n: StudioNode): DType {
+  return n.type === "prompt" ? "text" : n.type === "image" ? n.data.kind ?? "image" : n.data.kind;
 }
 
 /** Input port spec for a node's target handle (only model nodes have inputs). */
@@ -135,6 +145,9 @@ function freeSpot(nodes: StudioNode[], want: { x: number; y: number }) {
   }
   return want;
 }
+
+/** In-app clipboard for Ctrl+C / Ctrl+V of nodes. */
+let clipboard: { nodes: StudioNode[]; edges: Edge[] } | null = null;
 
 let nextId = 1;
 const newId = (p: string) => `${p}${Date.now().toString(36)}${(nextId++).toString(36)}`;
@@ -258,18 +271,91 @@ export const useStudio = create<StudioStore>((set, get) => ({
     scheduleSave();
   },
 
-  addNode(type, at, kind, exact) {
+  addNode(type, at, opts = {}) {
     const id = newId("n");
-    const position = exact ? at : freeSpot(get().nodes, at);
+    const position = opts.exact ? at : freeSpot(get().nodes, at);
     let node: StudioNode;
     if (type === "prompt") node = { id, type, position, data: { text: "" } };
-    else if (type === "image") node = { id, type, position, data: { fileKey: null, name: "" } };
+    else if (type === "image") node = { id, type, position, data: { fileKey: null, name: "", kind: "image" } };
     else {
-      const spec = modelsOfKind(kind ?? "image")[0];
+      const spec = (opts.modelId && getModel(opts.modelId)) || defaultModel(opts.kind ?? "image");
       node = { id, type: "model", position, data: { kind: spec.kind, modelId: spec.id, prompt: "", params: defaultParams(spec) } };
     }
     set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), { ...node, dragHandle: ".node-head", selected: true }] }));
     scheduleSave();
+    return id;
+  },
+
+  async addFiles(files, at) {
+    const accepted = files.slice(0, 12);
+    const ids = accepted.map((f, i) =>
+      get().addNode("image", { x: at.x + i * 36, y: at.y + i * 36 }, { exact: true }));
+    await Promise.all(accepted.map(async (file, i) => {
+      try {
+        const r = await uploadFile(file);
+        get().setUpload(ids[i], { fileKey: r.key, name: file.name, kind: r.kind });
+      } catch (e) {
+        get().toast(`${file.name}: ${(e as Error).message}`, true);
+        set((s) => ({ nodes: s.nodes.filter((n) => n.id !== ids[i]) })); // nothing to show
+      }
+    }));
+    if (files.length > accepted.length) get().toast("За раз можно добавить до 12 файлов", true);
+  },
+
+  setUpload(id, file) {
+    set((s) => {
+      const nodes = s.nodes.map((n) => (n.id === id && n.type === "image" ? { ...n, data: { ...n.data, ...file } } : n));
+      const node = nodes.find((n) => n.id === id);
+      const edges = s.edges.filter((e) => {
+        if (e.source !== id || !node) return true;
+        const port = inputPort(nodes.find((n) => n.id === e.target), e.targetHandle);
+        return port?.dtype === file.kind;
+      });
+      return { nodes, edges: edges.map((e) => (e.source === id ? { ...e, sourceHandle: file.kind, className: edgeClass({ sourceHandle: file.kind }) } : e)) };
+    });
+    scheduleSave();
+  },
+
+  pin(id, outputId) {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== id || n.type !== "model") return n;
+        const data = { ...n.data };
+        if (outputId) data.pinnedOutputId = outputId; else delete data.pinnedOutputId;
+        return { ...n, data };
+      }),
+    }));
+    scheduleSave();
+  },
+
+  copySelection() {
+    const { nodes, edges } = get();
+    const picked = nodes.filter((n) => n.selected);
+    const ids = new Set(picked.map((n) => n.id));
+    clipboard = picked.length ? { nodes: picked, edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)) } : null;
+    return picked.length;
+  },
+
+  paste() {
+    if (!clipboard) return;
+    const idMap = new Map<string, string>();
+    const nodes = clipboard.nodes.map((n) => {
+      const id = newId("n");
+      idMap.set(n.id, id);
+      const data = n.type === "model" ? (({ pinnedOutputId: _p, ...rest }) => rest)(n.data) : n.data; // results belong to the original
+      return { ...n, id, data, position: { x: n.position.x + 48, y: n.position.y + 48 }, selected: true } as StudioNode;
+    });
+    const edges = clipboard.edges.map((e) => ({
+      ...e, id: newId("e"), source: idMap.get(e.source)!, target: idMap.get(e.target)!, selected: false,
+    }));
+    set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), ...nodes], edges: [...s.edges, ...edges] }));
+    // pasting again cascades instead of stacking on the same spot
+    clipboard = { nodes, edges };
+    scheduleSave();
+  },
+
+  duplicateSelection() {
+    if (get().copySelection()) get().paste();
   },
 
   updateData(id, patch) {
@@ -404,6 +490,8 @@ export const useStudio = create<StudioStore>((set, get) => ({
     }
 
     const ids = plan.jobs.map((j) => j.nodeId);
+    // a node that runs again passes on its fresh result, not an old pick
+    for (const id of ids) get().pin(id, null);
     set((s) => {
       const localErrors = { ...s.localErrors };
       const submitting = { ...s.submitting };
@@ -416,7 +504,8 @@ export const useStudio = create<StudioStore>((set, get) => ({
       const r = await fetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ graphId, doc, targets, mode }),
+        // fresh snapshot: pins of re-running nodes were just cleared
+        body: JSON.stringify({ graphId, doc: toDoc(get().nodes, get().edges, get().viewport), targets, mode }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {

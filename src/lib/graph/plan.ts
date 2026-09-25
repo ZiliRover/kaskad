@@ -69,15 +69,20 @@ export function planRun(opts: PlanOptions): PlanResult {
         }
       }
       if (refs.length) { ports[port.key] = refs; inputCounts[port.key] = refs.length; }
+      if (refs.length < port.min) {
+        throw new PlanError(nodeId, port.min === 1
+          ? `Подключи вход «${port.label}»: без него модель не работает`
+          : `Подключи минимум ${port.min} во вход «${port.label}»`);
+      }
     }
 
     if (!ports.prompt) {
       const text = node.data.prompt.trim();
-      if (!text) throw new PlanError(nodeId, "Нет промта: напиши его в ноде или подключи ноду «Промт»");
-      ports.prompt = [{ type: "text", text }];
+      if (text) ports.prompt = [{ type: "text", text }];
+      else if (!spec.promptOptional) throw new PlanError(nodeId, "Нет промта: напиши его в ноде или подключи ноду «Промт»");
     }
 
-    const promptChars = ports.prompt.reduce((s, r) => s + (r.type === "text" ? r.text.length : 400), 0);
+    const promptChars = (ports.prompt ?? []).reduce((s, r) => s + (r.type === "text" ? r.text.length : 400), 0);
     visiting.delete(nodeId);
     planned.set(nodeId, {
       nodeId,
@@ -113,8 +118,11 @@ function refFor(src: GraphNode, targetId: string, portLabel: string): InputRef {
     return { type: "text", text };
   }
   if (src.type === "image") {
-    if (!src.data.fileKey) throw new PlanError(targetId, `В подключённую ноду «Изображение» не загружена картинка`);
+    if (!src.data.fileKey) throw new PlanError(targetId, "В подключённую ноду загрузки не добавлен файл");
     return { type: "file", key: src.data.fileKey };
   }
-  return { type: "node", nodeId: src.id };
+  // the user may have picked an earlier result/variant to pass on
+  return src.data.pinnedOutputId
+    ? { type: "node", nodeId: src.id, outputId: src.data.pinnedOutputId }
+    : { type: "node", nodeId: src.id };
 }

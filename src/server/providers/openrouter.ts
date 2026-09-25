@@ -69,6 +69,8 @@ const cost = (d: Json): number | null => {
 };
 
 const imageRef = (url: string) => ({ type: "image_url", image_url: { url } });
+const videoRef = (url: string) => ({ type: "video_url", video_url: { url } });
+const audioRef = (url: string) => ({ type: "audio_url", audio_url: { url } });
 
 function pickParams(params: Record<string, unknown>, keys: string[]): Json {
   const out: Json = {};
@@ -89,24 +91,25 @@ export const openRouter: Provider = {
   mode: "live",
 
   async image(req: ImageRequest) {
+    const n = Math.max(1, Number.parseInt(String(req.params.n ?? 1), 10) || 1);
     const d = await call("/images", {
       method: "POST",
       body: JSON.stringify({
         model: req.model,
         prompt: req.prompt,
-        n: 1,
+        n,
         ...pickParams(req.params, ["aspect_ratio", "resolution", "quality", "background"]),
         ...seed(req.params),
         ...(req.references.length ? { input_references: req.references.map(imageRef) } : {}),
       }),
     });
-    const img = d.data?.[0];
-    if (!img?.b64_json) throw new ProviderError("Модель не вернула изображение. Попробуйте переформулировать промт.");
-    return {
-      bytes: Buffer.from(img.b64_json, "base64"),
-      mime: img.media_type ?? "image/png",
-      costUsd: cost(d),
-    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const images: Media[] = (d.data ?? []).filter((x: any) => x?.b64_json).map((x: any) => ({
+      bytes: Buffer.from(x.b64_json, "base64"),
+      mime: x.media_type ?? "image/png",
+    }));
+    if (!images.length) throw new ProviderError("Модель не вернула изображение. Попробуйте переформулировать промт.");
+    return { images, costUsd: cost(d) };
   },
 
   async submitVideo(req: VideoRequest) {
@@ -115,17 +118,28 @@ export const openRouter: Provider = {
       req.lastFrame && { ...imageRef(req.lastFrame), frame_type: "last_frame" },
     ].filter(Boolean);
     const duration = Number.parseInt(String(req.params.duration ?? ""), 10);
+    const upscale = Number.parseFloat(String(req.params.upscale_factor ?? ""));
+    const creativity = Number.parseInt(String(req.params.creativity ?? ""), 10);
+    const references = [
+      ...(req.sourceVideo ? [videoRef(req.sourceVideo)] : []),
+      ...req.refImages.map(imageRef),
+      ...req.refVideos.map(videoRef),
+      ...req.refAudio.map(audioRef),
+    ];
     const d = await call("/videos", {
       method: "POST",
       timeoutMs: 120_000,
       body: JSON.stringify({
         model: req.model,
-        prompt: req.prompt,
+        ...(req.prompt ? { prompt: req.prompt } : {}),
         ...pickParams(req.params, ["resolution", "aspect_ratio"]),
         ...(Number.isFinite(duration) ? { duration } : {}),
         ...(typeof req.params.generate_audio === "boolean" ? { generate_audio: req.params.generate_audio } : {}),
         ...seed(req.params),
+        ...(Number.isFinite(upscale) ? { upscale_factor: upscale } : {}),
+        ...(Number.isFinite(creativity) ? { creativity } : {}),
         ...(frames.length ? { frame_images: frames } : {}),
+        ...(references.length ? { input_references: references } : {}),
       }),
     });
     if (!d.id) throw new ProviderError("Провайдер не принял задачу на генерацию");

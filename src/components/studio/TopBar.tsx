@@ -6,6 +6,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { BRAND } from "@/config/brand";
 import { formatKop, formatUsd } from "@/lib/money";
+import type { ProjectSummary } from "@/lib/projects";
+import { Projects } from "./Projects";
 import { isActive, useStudio } from "./store";
 import { useTheme, type ThemeMode } from "./theme";
 
@@ -84,7 +86,9 @@ function AccountMenu() {
   );
 }
 
-export function TopBar({ graphName, providerMode }: { graphName: string; providerMode: "live" | "mock" }) {
+export function TopBar({ graphId, graphName, projects, providerMode }: {
+  graphId: string; graphName: string; projects: ProjectSummary[]; providerMode: "live" | "mock";
+}) {
   const run = useStudio((s) => s.run);
   const setPanel = useStudio((s) => s.setPanel);
   const galleryOpen = useStudio((s) => s.galleryOpen);
@@ -100,7 +104,7 @@ export function TopBar({ graphName, providerMode }: { graphName: string; provide
         <span className="logo" aria-hidden />
         <span className="brand">{BRAND.name}</span>
         <span className="tb-sep" aria-hidden>/</span>
-        <span className="graph-name">{graphName}</span>
+        <Projects currentId={graphId} initialName={graphName} initial={projects} />
       </div>
       <div className="tb-right">
         {providerMode === "mock" && (

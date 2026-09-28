@@ -954,3 +954,29 @@ button.side-title:hover { color: var(--text-2); }
   .edge-run path, .node.is-running, .node.is-running .node-head::after { animation: none; }
 }
 .balance-tag { font-size: 11px; font-weight: 550; color: var(--text-3); }
+
+/* ---------------------------------------------------------------- projects */
+
+.projects { position: relative; min-width: 0; }
+.projects-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 320px;
+  height: 30px; padding: 0 8px; margin-left: -8px; border-radius: var(--r-ctl);
+  color: var(--text-2);
+}
+.projects-trigger:hover { background: var(--panel-2); color: var(--text); }
+.projects-trigger svg { flex: none; color: var(--text-3); }
+.projects-menu { left: -8px; right: auto; top: 38px; width: 340px; padding: 6px; }
+.projects-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 8px 6px; }
+.projects-head .btn { width: auto; gap: 5px; }
+.projects-list { list-style: none; max-height: min(420px, 60vh); overflow-y: auto; scrollbar-width: thin; }
+.projects-list li { position: relative; display: flex; align-items: center; border-radius: 6px; }
+.projects-list li:hover, .projects-list li.is-current { background: var(--panel-3); }
+.menu .projects-open { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 8px; }
+.menu .projects-open:hover { background: none; }
+.projects-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.is-current .projects-name { color: var(--accent-strong); }
+.projects-meta { font-size: 11px; color: var(--text-3); }
+.projects-actions { display: none; gap: 2px; padding-right: 6px; }
+.projects-list li:hover .projects-actions, .projects-list li:focus-within .projects-actions { display: flex; }
+.menu .projects-actions .icon-btn { width: 24px; height: 24px; padding: 0; justify-content: center; }
+.projects-rename { margin: 3px; height: 32px; }

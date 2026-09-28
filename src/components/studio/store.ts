@@ -206,6 +206,12 @@ function scheduleSave() {
   saveTimer = setTimeout(flushSave, 700);
 }
 
+/** Write any pending edit now; resolves when every save has landed (before leaving the canvas). */
+export function flushPendingSave(): Promise<unknown> {
+  if (saveTimer) flushSave();
+  return saving;
+}
+
 function flushSave() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   const { graphId, nodes, edges, viewport } = useStudio.getState();

@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { defaultModel, defaultParams, getModel, isBlocked, reconcileParams } from "@/lib/models/registry";
 import { blockedVendors } from "./providers";
 import type { GraphDoc } from "@/lib/graph/types";
+import type { ProjectSummary } from "@/lib/projects";
 import type { GraphState, JobStatus, NodeState, OutputVersion } from "@/lib/jobs";
 import { db, graphs, jobs, outputs } from "./db";
 import { fileUrl } from "./storage";
@@ -60,6 +61,55 @@ export async function userGraph(userId: string) {
 export async function ownedGraph(id: string, userId: string) {
   const [row] = await db.select().from(graphs).where(and(eq(graphs.id, id), eq(graphs.ownerId, userId)));
   return row ?? null;
+}
+
+
+/** The user's canvases, most recently edited first. */
+export async function listProjects(userId: string): Promise<ProjectSummary[]> {
+  const rows = await db.select({ id: graphs.id, name: graphs.name, updatedAt: graphs.updatedAt, doc: graphs.doc })
+    .from(graphs).where(eq(graphs.ownerId, userId)).orderBy(desc(graphs.updatedAt));
+  return rows.map((r) => ({
+    id: r.id, name: r.name, updatedAt: r.updatedAt.toISOString(),
+    nodes: r.doc.nodes.filter((n) => n.type !== "note" && n.type !== "group").length,
+  }));
+}
+
+const EMPTY_DOC: GraphDoc = { nodes: [], edges: [], viewport: { x: 80, y: 80, zoom: 1 } };
+
+/**
+ * A new canvas: empty, the starter chain, or a copy of one of the user's canvases.
+ * A copy takes the graph, not its results: picks of specific results are dropped.
+ */
+export async function createProject(userId: string, opts: { name?: string; from?: "empty" | "starter"; copyOf?: string }) {
+  let doc: GraphDoc = opts.from === "starter" ? starterDoc() : EMPTY_DOC;
+  let name = opts.name?.trim() || "Новый проект";
+  if (opts.copyOf) {
+    const src = await ownedGraph(opts.copyOf, userId);
+    if (!src) return null;
+    doc = {
+      ...src.doc,
+      nodes: src.doc.nodes.map((n) => n.type === "model" ? { ...n, data: { ...n.data, pinnedOutputId: undefined } } : n),
+    };
+    name = opts.name?.trim() || `${src.name} (копия)`;
+  }
+  const [row] = await db.insert(graphs).values({ id: randomUUID(), ownerId: userId, name: name.slice(0, 80), doc }).returning();
+  return row;
+}
+
+export async function renameProject(id: string, userId: string, name: string) {
+  const r = await db.update(graphs).set({ name: name.trim().slice(0, 80) })
+    .where(and(eq(graphs.id, id), eq(graphs.ownerId, userId))).returning({ id: graphs.id });
+  return r.length > 0;
+}
+
+/** Deletes a canvas with its runs and results. Refused while something on it is generating. */
+export async function deleteProject(id: string, userId: string): Promise<"deleted" | "busy" | "missing"> {
+  if (!(await ownedGraph(id, userId))) return "missing";
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(jobs)
+    .where(and(eq(jobs.graphId, id), sql`${jobs.status} in ('queued', 'running')`));
+  if (n > 0) return "busy";
+  await db.delete(graphs).where(and(eq(graphs.id, id), eq(graphs.ownerId, userId)));
+  return "deleted";
 }
 
 export async function graphOwner(id: string): Promise<string | null> {

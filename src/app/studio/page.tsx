@@ -1,38 +1,15 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { Studio } from "@/components/studio/Studio";
-import { isAdmin } from "@/server/admin";
 import { currentUser } from "@/server/auth";
-import { balanceKop, reservedKop } from "@/server/billing";
-import { getFx } from "@/server/fx";
-import { graphState, userGraph } from "@/server/graphs";
-import { paymentsProvider } from "@/server/payments";
-import { blockedVendors, providerMode } from "@/server/providers";
-import { accountBalanceUsd } from "@/server/providers/openrouter";
+import { userGraph } from "@/server/graphs";
 
-export default async function StudioPage() {
-  await connection(); // per-request: reads the session and the database
+/** /studio opens the canvas the user edited last (created on the first visit). */
+export default async function StudioIndex({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await connection();
   const user = await currentUser();
   if (!user) redirect("/login");
-  const admin = isAdmin(user);
-  const [graph, fx, available, reserved, providerUsd] = await Promise.all([
-    userGraph(user.id), getFx(), balanceKop(user.id), reservedKop(user.id),
-    admin ? accountBalanceUsd() : Promise.resolve(null),
-  ]);
-  return (
-    <Studio
-      graphId={graph.id}
-      graphName={graph.name}
-      initialDoc={graph.doc}
-      initialState={await graphState(graph.id)}
-      providerMode={providerMode()}
-      // operators see what the provider actually charges; users see their price with the markup
-      fx={admin ? { ...fx, markup: 1 } : fx}
-      blockedVendors={blockedVendors()}
-      account={{
-        email: user.email, availableKop: available, reservedKop: reserved, payments: paymentsProvider(),
-        admin, providerUsd,
-      }}
-    />
-  );
+  const graph = await userGraph(user.id);
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) if (typeof v === "string") q.set(k, v);
+  redirect(`/studio/${graph.id}${q.size ? `?${q}` : ""}`);
 }

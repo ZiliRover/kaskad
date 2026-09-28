@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { GraphState } from "@/lib/jobs";
 import type { Fx } from "@/lib/money";
+import type { ProjectSummary } from "@/lib/projects";
 import { formatKop } from "@/lib/money";
 import { Billing } from "./Billing";
 import { Canvas } from "./Canvas";
@@ -27,6 +28,7 @@ interface Props {
   fx: Fx;
   blockedVendors: string[];
   account: Account;
+  projects: ProjectSummary[];
 }
 
 /** Back from the checkout (?payment=id): wait for the provider's confirmation, then say what happened. */
@@ -44,7 +46,7 @@ async function followPayment(id: string) {
   toast("Платёж ещё обрабатывается. Баланс обновится, как только банк его подтвердит.");
 }
 
-export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx, blockedVendors, account }: Props) {
+export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx, blockedVendors, account, projects }: Props) {
   // the store is a browser singleton: fill it on mount, never during server render
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -65,7 +67,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
   return (
     <ReactFlowProvider>
       <div className="app">
-        <TopBar graphName={graphName} providerMode={providerMode} />
+        <TopBar graphId={graphId} graphName={graphName} projects={projects} providerMode={providerMode} />
         <div className="workspace">
           <Sidebar />
           <main className="canvas">{ready ? <Canvas /> : null}</main>

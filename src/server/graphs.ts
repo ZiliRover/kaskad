@@ -1,17 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { defaultModel, defaultParams } from "@/lib/models/registry";
+import { defaultModel, defaultParams, getModel, isBlocked, reconcileParams } from "@/lib/models/registry";
 import { blockedVendors } from "./providers";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { GraphState, JobStatus, NodeState, OutputVersion } from "@/lib/jobs";
 import { db, graphs, jobs, outputs } from "./db";
 import { fileUrl } from "./storage";
 
-/** Starter canvas: a real chain (prompt → image → video) the user can run immediately. */
+/** Fast Seedance at 480p: the whole starter chain costs about 30 ₽, well inside the welcome bonus. */
+const STARTER_VIDEO = "bytedance/seedance-2.0-fast";
+
+/** Starter canvas: a real chain (prompt → image → video) a new user can run on the welcome bonus. */
 function starterDoc(): GraphDoc {
   const blocked = blockedVendors();
   const img = defaultModel("image", blocked);
-  const vid = defaultModel("video", blocked);
+  const fast = getModel(STARTER_VIDEO);
+  const vid = fast && !isBlocked(fast.id, blocked) ? fast : defaultModel("video", blocked);
+  const vidParams = reconcileParams(vid, { ...defaultParams(vid), resolution: "480p" });
   return {
     nodes: [
       {
@@ -29,7 +34,7 @@ function starterDoc(): GraphDoc {
       },
       {
         id: "m2", type: "model", position: { x: 1240, y: 0 },
-        data: { kind: "video", modelId: vid.id, prompt: "", params: defaultParams(vid) },
+        data: { kind: "video", modelId: vid.id, prompt: "", params: vidParams },
       },
     ],
     edges: [

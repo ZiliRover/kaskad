@@ -894,3 +894,41 @@ button.side-title:hover { color: var(--text-2); }
 @media (max-width: 900px) {
   .tb-sep, .graph-name { display: none; }
 }
+
+/* ---------------------------------------------------------------- run on the wires */
+
+.edge-run { pointer-events: none; fill: none; --run: var(--t-text); }
+.edge-run.t-image { --run: var(--t-image); }
+.edge-run.t-video { --run: var(--t-video); }
+.edge-run.t-audio { --run: var(--t-audio); }
+.edge-run path { fill: none; stroke-linecap: round; }
+/* the wire itself lights up in its data colour */
+.edge-run-track { stroke: var(--run); stroke-width: 2; opacity: .9; }
+.edge-run.is-pending .edge-run-track { opacity: .35; }
+/* flow: two comets travelling into the node that is generating */
+.edge-run.is-flow .edge-run-pulse {
+  stroke: var(--run);
+  stroke-width: 4.5;
+  stroke-dasharray: 7 43;
+  filter: drop-shadow(0 0 4px var(--run));
+  animation: edge-flow 1.5s linear infinite;
+}
+/* pending: the route still ahead, marching slowly towards the target */
+.edge-run.is-pending .edge-run-pulse {
+  stroke: var(--run);
+  stroke-width: 2;
+  stroke-dasharray: 1.2 3;
+  opacity: .8;
+  animation: edge-flow 6s linear infinite;
+}
+@keyframes edge-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+
+/* the node doing the work now */
+.node.is-running {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-run .edge-run-pulse { animation: none; }
+}

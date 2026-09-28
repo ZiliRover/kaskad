@@ -2,12 +2,13 @@
 
 import {
   Background, BackgroundVariant, Controls, MiniMap, ReactFlow, useReactFlow,
-  type Connection, type Edge, type Node, type NodeTypes,
+  type Connection, type Edge, type EdgeTypes, type Node, type NodeTypes,
 } from "@xyflow/react";
 import { useCallback, useRef } from "react";
 import { getModel } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
 import { canConnect, outputType, remember, useStudio, type StudioNode } from "./store";
+import { FlowEdge } from "./FlowEdge";
 import { useTheme } from "./theme";
 import { mediaFiles } from "./upload";
 import { GroupNode } from "./nodes/GroupNode";
@@ -17,6 +18,7 @@ import { NoteNode } from "./nodes/NoteNode";
 import { PromptNode } from "./nodes/PromptNode";
 
 const nodeTypes: NodeTypes = { prompt: PromptNode, image: ImageNode, model: ModelNode, note: NoteNode, group: GroupNode };
+const edgeTypes: EdgeTypes = { default: FlowEdge };
 
 export const PALETTE_MIME = "application/x-kaskad-node";
 export interface PalettePayload {
@@ -132,6 +134,7 @@ export function Canvas() {
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}

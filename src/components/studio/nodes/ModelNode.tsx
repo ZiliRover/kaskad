@@ -133,6 +133,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       dtype={data.kind}
       selected={selected}
       busy={busy}
+      running={job?.status === "running"}
       wide
       footer={footer}
     >

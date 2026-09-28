@@ -38,7 +38,7 @@ export interface Account {
 
 export interface ConfirmRequest { title: string; body: string; confirm: string; resolve: (ok: boolean) => void }
 
-interface StudioStore {
+export interface StudioStore {
   graphId: string;
   nodes: StudioNode[];
   edges: Edge[];

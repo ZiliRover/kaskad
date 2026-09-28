@@ -18,6 +18,8 @@ interface Props {
   dtype: DType;
   selected?: boolean;
   busy?: boolean;
+  /** generating right now (not just queued) */
+  running?: boolean;
   wide?: boolean;
   children: ReactNode;
   footer?: ReactNode;
@@ -26,10 +28,10 @@ interface Props {
 }
 
 /** Common frame: draggable header with the output handle, body, optional footer. */
-export function NodeShell({ id, title, subtitle, hint, icon, dtype, selected, busy, wide, children, footer, actions }: Props) {
+export function NodeShell({ id, title, subtitle, hint, icon, dtype, selected, busy, running, wide, children, footer, actions }: Props) {
   const removeNode = useStudio((s) => s.removeNode);
   return (
-    <div className={`node${wide ? " node-wide" : ""}${selected ? " is-selected" : ""}${busy ? " is-busy" : ""}`}>
+    <div className={`node${wide ? " node-wide" : ""}${selected ? " is-selected" : ""}${busy ? " is-busy" : ""}${running ? " is-running" : ""}`}>
       <div className="node-head" title={hint}>
         <NodeIcon node={icon} dtype={dtype} />
         <span className="node-title">

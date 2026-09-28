@@ -29,9 +29,14 @@
 - **Nodes show exactly what a model accepts.** First and last frame, image references, video and audio references for Seedance 2, a source video for edit and upscale models. Required inputs are marked; wires only connect matching types.
 - **Price before you run, pay in rubles.** Every node shows its price in rubles at the daily Central Bank rate. A run reserves its estimate from the prepaid balance and is charged what the provider actually billed; failed generations cost nothing.
 - **Sign in with an email code.** No passwords. Every account has its own canvas, files and balance, tops up by card through YooKassa, and gets a welcome bonus to try things.
+- **Batches.** A List node holds up to 50 prompts or files; every model it feeds runs once per item, and the chain after it follows item by item. Twenty product photos become twenty cards and twenty videos with one click.
+- **Describe it, get a graph.** The agent turns a sentence ("vertical WB video from my photo with a -30% caption") into a checked chain of models, prompts and tools, with the price shown before anything runs.
+- **Apps from graphs.** Publish a project as a simple form: pick which inputs people fill in and which results they get, share the link. Runners pay for their own runs and never see the graph.
+- **Compare models.** Copy a node onto three other models with the same inputs, run them, and see the results side by side with what each cost.
+- **Voiceover.** Russian speech with MiniMax and Grok voices, or any voice cloned from a short sample, straight into "sound on video".
 - **Variants, versions, and what flows next.** Generate up to 4 images at once, click the best one, and that is what the next node receives. Older results stay browsable.
-- **Long videos without an editor.** Built-in tools take the last frame of a clip for the next scene and join clips into one video (ffmpeg, free).
-- **A studio, not a demo.** Templates, a results gallery you can drag back onto the canvas, prompt improvement and translation, notes and groups, copy/paste, undo for deletions, drop or paste files from your computer.
+- **Editing without an editor.** Free ffmpeg tools: last frame, join, trim, speed, sound on video, reframe to 9:16 / 3:4 / 1:1, text over images and videos.
+- **A studio, not a demo.** Projects, templates, a results gallery you can drag back onto the canvas, prompt improvement and translation, notes and groups, copy/paste, undo for deletions, drop or paste files from your computer.
 
 ## Why it's built this way
 
@@ -91,6 +96,7 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `ADMIN_EMAILS` | | operators: generate without a balance limit and see the OpenRouter balance instead of their own |
 | `PRICE_MARKUP` | `1.5` | user price = provider cost × Central Bank rate × markup |
 | `WELCOME_BONUS_RUB` | `50` | credited once to each new account |
+| `OVERLAY_FONT` | system bold font | TTF with Cyrillic for text-on-image/video tools |
 | `SMTP_URL` / `MAIL_FROM` | | mail for login codes (`smtps://user:pass@host:465`); without it, dev prints codes to the console |
 | `PAYMENTS_PROVIDER` | `test` in dev | `yookassa` for real payments; webhook: `<APP_URL>/api/payments/webhook` |
 | `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY` | | YooKassa shop credentials |
@@ -103,7 +109,9 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 - **Add a model:** drag it from the left panel onto the canvas. Search by name or filter by what you need: frames, references, video/audio references, sound, variants.
 - **Swap a model:** drag another model of the same kind onto an existing node. Wires and compatible settings are kept.
 - **Bring your files:** drop images, videos or audio anywhere on the canvas, or paste them with <kbd>Ctrl</kbd>+<kbd>V</kbd>.
-- **Start from a template:** *Templates* in the header adds a ready chain next to your work: product card and video, idea → frame → video, character from references, two-scene video, restyle an image, video upscale.
+- **Start from a template:** *Templates* in the header adds a ready chain next to your work: product card and video, cards for a whole catalogue, idea → frame → video, character from references, two-scene video, restyle an image, video upscale.
+- **Or describe it:** *Собрать* in the header builds the chain for you.
+- **Share it:** the project menu turns the current project into an app with a link.
 
 | Shortcut | Action |
 | --- | --- |

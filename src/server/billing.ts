@@ -16,7 +16,7 @@ import { db } from "./db";
 type Exec = { execute: typeof db.execute };
 
 /** Reserve when the price can't be estimated up front (edit/upscale of unknown length). */
-const FALLBACK_HOLD_KOP: Record<MediaKind, number> = { video: 300_00, image: 30_00, text: 5_00 };
+const FALLBACK_HOLD_KOP: Record<MediaKind, number> = { video: 300_00, image: 30_00, text: 5_00, audio: 10_00 };
 
 export function holdKop(estimateUsd: number | null, kind: MediaKind, fx: Fx, free: boolean): number {
   if (free) return 0;

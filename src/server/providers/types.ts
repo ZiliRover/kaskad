@@ -28,6 +28,14 @@ export interface TextRequest {
   images: string[];                // data URLs
 }
 
+export interface SpeechRequest {
+  model: string;
+  text: string;
+  voice: string | null;
+  /** voice cloning: a sample of the voice as a data URL */
+  sample: string | null;
+}
+
 export interface Media {
   bytes: Uint8Array;
   mime: string;
@@ -46,6 +54,7 @@ export interface Provider {
   pollVideo(externalId: string): Promise<VideoPoll>;
   downloadVideo(externalId: string): Promise<Media>;
   text(req: TextRequest): Promise<{ text: string; costUsd: number | null }>;
+  speech(req: SpeechRequest): Promise<{ audio: Media; costUsd: number | null }>;
 }
 
 /** Error whose message is safe and meaningful to show the user as-is. */

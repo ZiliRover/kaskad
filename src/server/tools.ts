@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ProviderError } from "./providers";
+import { ProviderError } from "./providers/types";
 
 const FFMPEG = process.env.FFMPEG_PATH ?? "ffmpeg";
 const FFPROBE = process.env.FFPROBE_PATH ?? "ffprobe";
@@ -74,6 +74,16 @@ export async function concatVideos(paths: string[]): Promise<Uint8Array> {
       "-filter_complex", filter, "-map", "[v]", ...(audio ? ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"] : []),
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-movflags", "+faststart", "-y", out,
     ], 15 * 60_000);
+    return readFile(out);
+  });
+}
+
+/** A quiet sine tone as MP3: the test-mode stand-in for speech. */
+export async function tone(seconds: number): Promise<Uint8Array> {
+  return withTmp(async (dir) => {
+    const out = path.join(dir, "tone.mp3");
+    await exec(FFMPEG, ["-v", "error", "-f", "lavfi", "-i", `sine=frequency=330:duration=${seconds.toFixed(1)}`,
+      "-af", "volume=0.15,afade=t=in:d=0.2", "-c:a", "libmp3lame", "-b:a", "96k", "-y", out]);
     return readFile(out);
   });
 }

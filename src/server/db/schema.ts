@@ -9,7 +9,7 @@ export const jobStatus = pgEnum("job_status", [
   "queued", "running", "succeeded", "failed", "skipped", "canceled",
 ]);
 
-export const mediaKind = pgEnum("media_kind", ["text", "image", "video"]);
+export const mediaKind = pgEnum("media_kind", ["text", "image", "video", "audio"]);
 
 /** A canvas document. */
 export const graphs = pgTable("graphs", {

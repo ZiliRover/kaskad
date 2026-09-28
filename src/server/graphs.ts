@@ -165,7 +165,7 @@ interface StateRow extends Record<string, unknown> {
   started_at: Date | null;
   active_ids: string[] | null;
   output_id: string | null;
-  kind: "text" | "image" | "video" | null;
+  kind: "text" | "image" | "video" | "audio" | null;
   file_key: string | null;
   mime: string | null;
   text: string | null;

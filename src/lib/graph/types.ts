@@ -17,7 +17,7 @@ export const imageData = z.object({
   kind: z.enum(["image", "video", "audio"]).optional(),
 });
 export const modelData = z.object({
-  kind: z.enum(["text", "image", "video"]),
+  kind: z.enum(["text", "image", "video", "audio"]),
   modelId: z.string().max(200),
   prompt: z.string().max(20000),
   params: z.record(z.string(), paramValue),

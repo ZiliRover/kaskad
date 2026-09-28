@@ -244,6 +244,43 @@ const TOOLS: ModelSpec[] = [
   },
 ];
 
+/**
+ * Speech (OpenRouter /audio/speech). Not in the synced catalogs yet, so curated here;
+ * all verified live with Russian text. Billed per character.
+ */
+const TEXT_IN: PortSpec = { key: "prompt", dtype: "text", label: "Текст", max: 1, min: 1, hint: "что сказать" };
+const SPEECH: ModelSpec[] = [
+  {
+    id: "minimax/speech-2.8-turbo", kind: "audio", group: "audio", name: "MiniMax Speech 2.8", vendor: "MiniMax",
+    blurb: "Живая русская озвучка, 8 голосов", featured: true, promptOptional: false,
+    caps: NO_CAPS, inputs: [TEXT_IN],
+    params: [enumParam("voice", "Голос", "Russian_ReliableMan", [
+      ["Russian_ReliableMan", "Надёжный (муж.)"], ["Russian_AttractiveGuy", "Обаятельный (муж.)"],
+      ["Russian_HandsomeChildhoodFriend", "Друг детства (муж.)"], ["Russian_Bad-temperedBoy", "Вспыльчивый (муж.)"],
+      ["Russian_BrightHeroine", "Яркая (жен.)"], ["Russian_AmbitiousWoman", "Уверенная (жен.)"],
+      ["Russian_CrazyQueen", "Эксцентричная (жен.)"], ["Russian_PessimisticGirl", "Меланхоличная (жен.)"],
+    ])],
+    pricing: { type: "chars", usdPerChar: 0.00006 },
+  },
+  {
+    id: "x-ai/grok-voice-tts-1.0", kind: "audio", group: "audio", name: "Grok Voice", vendor: "xAI",
+    blurb: "Недорогая озвучка, 20+ языков", featured: true, promptOptional: false,
+    caps: NO_CAPS, inputs: [TEXT_IN],
+    params: [enumParam("voice", "Голос", "eve", [
+      ["eve", "Eve (жен.)"], ["ara", "Ara (жен.)"], ["rex", "Rex (муж.)"], ["leo", "Leo (муж.)"], ["sal", "Sal (нейтр.)"],
+    ])],
+    pricing: { type: "chars", usdPerChar: 0.000015 },
+  },
+  {
+    id: "fish-audio/s2.1-pro", kind: "audio", group: "audio", name: "Голос по образцу", vendor: "Fish Audio",
+    blurb: "Говорит голосом из твоей записи: 10–30 секунд чистой речи", featured: true, promptOptional: false,
+    caps: NO_CAPS,
+    inputs: [TEXT_IN, { key: "voice_sample", dtype: "audio", label: "Образец голоса", max: 1, min: 1, hint: "10–30 с речи" }],
+    params: [],
+    pricing: { type: "chars", usdPerChar: 0.000015 },
+  },
+];
+
 const FEATURED_RANK = new Map(FEATURED.map((f, i) => [f.id, i]));
 
 export const MODELS: ModelSpec[] = ENTRIES
@@ -269,7 +306,7 @@ export const MODELS: ModelSpec[] = ENTRIES
     if (ra !== rb) return ra - rb;
     return `${a.vendor} ${a.name}`.localeCompare(`${b.vendor} ${b.name}`, "ru");
   })
-  .concat(TOOLS);
+  .concat(SPEECH, TOOLS);
 
 const BY_ID = new Map(MODELS.map((m) => [m.id, m]));
 

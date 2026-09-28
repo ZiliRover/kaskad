@@ -85,6 +85,7 @@ export function Gallery() {
                 onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}); }}
                 onMouseLeave={(e) => { e.currentTarget.pause(); }} />
             )}
+            {o.kind === "audio" && o.url && <audio className="gallery-audio" src={o.url} controls preload="none" />}
             {o.kind === "text" && <p className="gallery-text">{o.text}</p>}
             <figcaption>
               <span>{names.get(o.nodeId) ?? "Удалённая нода"}</span>

@@ -2,7 +2,7 @@
 
 import {
   ArrowsOutSimpleIcon, BezierCurveIcon, ChatCenteredTextIcon, FilmReelIcon, FilmStripIcon, FrameCornersIcon,
-  ImageIcon, ImagesIcon, MagicWandIcon, NotePencilIcon, PaintBrushIcon, PencilSimpleIcon, ScissorsIcon,
+  ImageIcon, ImagesIcon, MagicWandIcon, MicrophoneIcon, NotePencilIcon, PaintBrushIcon, PencilSimpleIcon, ScissorsIcon,
   ListBulletsIcon, SelectionIcon, SpeakerHighIcon, SquaresFourIcon, TextAaIcon, UploadSimpleIcon, WaveformIcon, type Icon,
 } from "@phosphor-icons/react";
 import type { DType, ModelCaps, ModelGroup } from "@/lib/models/types";
@@ -10,7 +10,7 @@ import type { DType, ModelCaps, ModelGroup } from "@/lib/models/types";
 /** One icon per node type, tinted with the color of the data it produces. */
 export type NodeKey =
   | "prompt" | "upload" | "note" | "group" | "tool" | "list"
-  | `upload:${"image" | "video" | "audio"}` | `model:${"image" | "video" | "text"}`;
+  | `upload:${"image" | "video" | "audio"}` | `model:${"image" | "video" | "text" | "audio"}`;
 
 const NODE_ICONS: Record<NodeKey, Icon> = {
   prompt: TextAaIcon,
@@ -21,6 +21,7 @@ const NODE_ICONS: Record<NodeKey, Icon> = {
   "model:image": MagicWandIcon,
   "model:video": FilmStripIcon,
   "model:text": ChatCenteredTextIcon,
+  "model:audio": MicrophoneIcon,
   note: NotePencilIcon,
   group: SelectionIcon,
   tool: ScissorsIcon,
@@ -40,6 +41,7 @@ export const GROUP_ICONS: Record<ModelGroup, Icon> = {
   "image-style": PaintBrushIcon,
   "image-vector": BezierCurveIcon,
   text: ChatCenteredTextIcon,
+  audio: MicrophoneIcon,
   tools: ScissorsIcon,
 };
 

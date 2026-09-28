@@ -1,5 +1,5 @@
 import {
-  ProviderError, type ImageRequest, type Media, type Provider, type TextRequest, type VideoPoll, type VideoRequest,
+  ProviderError, type ImageRequest, type Media, type Provider, type SpeechRequest, type TextRequest, type VideoPoll, type VideoRequest,
 } from "./types";
 
 const BASE = "https://openrouter.ai/api/v1";
@@ -250,7 +250,34 @@ export const openRouter: Provider = {
     if (typeof text !== "string" || !text.trim()) throw new ProviderError("Модель вернула пустой ответ");
     return { text: text.trim(), costUsd: cost(d) };
   },
+
+  speech: speechCall,
 };
+
+/** Text to speech (POST /audio/speech): raw audio bytes on success, JSON on error. */
+async function speechCall(req: SpeechRequest): Promise<{ audio: Media; costUsd: number | null }> {
+  const body: Json = { model: req.model, input: req.text, response_format: "mp3" };
+  if (req.voice) body.voice = req.voice;
+  if (req.sample) body.input_references = [{ type: "input_audio", input_audio: { data: req.sample } }];
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}/audio/speech`, {
+      method: "POST", headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(3 * 60_000),
+    });
+  } catch (e) {
+    const timeout = e instanceof Error && e.name === "TimeoutError";
+    throw new ProviderError(timeout ? "Провайдер не ответил вовремя. Попробуйте ещё раз." : "Нет связи с провайдером", true);
+  }
+  const buf = new Uint8Array(await r.arrayBuffer());
+  if (!r.ok) {
+    let data: Json | null = null;
+    try { data = JSON.parse(new TextDecoder().decode(buf)); } catch { /* not JSON */ }
+    throw failure(r.status, data);
+  }
+  if (buf.length < 1000) throw new ProviderError("Модель вернула пустую запись. Попробуйте другой голос или модель.");
+  // the endpoint returns audio only; the price is known up front (per character)
+  return { audio: { bytes: buf, mime: "audio/mpeg" }, costUsd: null };
+}
 
 const g = globalThis as unknown as { __orBalance?: { usd: number; at: number } };
 

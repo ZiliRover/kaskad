@@ -171,6 +171,17 @@ async function run(job: JobRow) {
     return;
   }
 
+  if (job.kind === "audio") {
+    // a voice sample goes inline: speech models accept it without a public link
+    const [sample] = await resolveMedia(job, ports.voice_sample);
+    const r = await provider.speech({
+      model: job.modelId, text: prompt, voice: params.voice ? String(params.voice) : null, sample: sample ?? null,
+    });
+    const key = await store(job, r.audio.bytes, r.audio.mime);
+    await completeJob(job, [{ fileKey: key, mime: r.audio.mime }], billable(job, r.costUsd));
+    return;
+  }
+
   if (job.kind === "text") {
     const r = await provider.text({
       model: job.modelId, prompt, system: String(params.system ?? ""), images: await resolveMedia(job, ports.images),

@@ -1,6 +1,6 @@
-export type MediaKind = "text" | "image" | "video";
-/** What flows along a wire. Audio can be an input (uploads, Seedance refs) but no model outputs it yet. */
-export type DType = MediaKind | "audio";
+export type MediaKind = "text" | "image" | "video" | "audio";
+/** What flows along a wire: the same kinds a model can produce. */
+export type DType = MediaKind;
 
 export type ParamValue = string | number | boolean;
 
@@ -34,11 +34,13 @@ export type PricingSpec =
   | { type: "video"; skus: Record<string, string> }
   | { type: "image"; lines: PricingLine[] }
   | { type: "text"; prompt: number; completion: number; image?: number }
+  /** speech: billed per character of the text */
+  | { type: "chars"; usdPerChar: number }
   /** our own tools run on the server (ffmpeg): no provider bill */
   | { type: "free" };
 
 /** Function groups for the model palette. */
-export type ModelGroup = "video" | "video-edit" | "image" | "image-style" | "image-vector" | "text" | "tools";
+export type ModelGroup = "video" | "video-edit" | "image" | "image-style" | "image-vector" | "text" | "audio" | "tools";
 
 /** Capability flags shown as icons in the palette and used for filtering. */
 export interface ModelCaps {

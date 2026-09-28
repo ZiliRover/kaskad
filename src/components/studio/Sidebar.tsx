@@ -20,6 +20,7 @@ const MODEL_GROUPS: { id: ModelGroup; title: string }[] = [
   { id: "video-edit", title: "Правка и апскейл видео" },
   { id: "image-style", title: "Стиль по образцам" },
   { id: "image-vector", title: "Векторы SVG" },
+  { id: "audio", title: "Озвучка" },
   { id: "text", title: "Текст (AI)" },
 ];
 

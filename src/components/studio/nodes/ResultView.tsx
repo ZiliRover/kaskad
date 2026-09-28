@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretLeftIcon, CaretRightIcon, CheckIcon, PushPinIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon, CheckIcon, PushPinIcon, WaveformIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { NodeState, OutputVersion } from "@/lib/jobs";
 import type { MediaKind } from "@/lib/models/types";
@@ -48,7 +48,7 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
 
   if (!latest) {
     if (!busy) return null;
-    return kind === "text"
+    return kind === "text" || kind === "audio"
       ? <div className="result skeleton skeleton-text" />
       : <div className="result skeleton" style={aspectStyle(aspect)} />;
   }
@@ -82,6 +82,9 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
       {out.kind === "video" && out.url && (
         <video key={out.url} className="result-media nodrag" src={`${out.url}#t=0.1`} controls loop playsInline preload="metadata" />
       )}
+      {out.kind === "audio" && out.url && (
+        <audio key={out.url} className="result-audio nodrag" src={out.url} controls preload="metadata" />
+      )}
       {out.kind === "text" && <div className="result-text nodrag nowheel">{out.text}</div>}
 
       {batch.length > 1 && (
@@ -100,7 +103,9 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
               onClick={() => (fanned ? setViewId(b.id) : choose(b.id))}
               title={fanned ? `Элемент ${i + 1}` : `Вариант ${i + 1}: передавать дальше`}
             >
-              {b.url && latest.kind === "video"
+              {b.url && latest.kind === "audio"
+                ? <span className="batch-audio"><WaveformIcon size={16} aria-hidden /></span>
+                : b.url && latest.kind === "video"
                 ? <video src={`${b.url}#t=0.1`} muted preload="metadata" />
                 // eslint-disable-next-line @next/next/no-img-element
                 : b.url && <img src={b.url} alt={`${fanned ? "Элемент" : "Вариант"} ${i + 1}`} />}

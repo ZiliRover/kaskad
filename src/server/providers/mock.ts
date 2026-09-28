@@ -5,6 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { tone } from "../tools";
 import { ProviderError, type Provider } from "./types";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -87,5 +88,13 @@ export const mockProvider: Provider = {
     maybeFail(req.prompt);
     const imgs = req.images.length ? ` (картинок на входе: ${req.images.length})` : "";
     return { text: `Тестовый ответ${imgs}. Улучшенный промт: ${req.prompt}`, costUsd: 0 };
+  },
+
+  async speech(req) {
+    await sleep(700);
+    maybeFail(req.text);
+    // a soft tone about as long as the text would take to say
+    const seconds = Math.min(30, Math.max(1.5, req.text.length / 14));
+    return { audio: { bytes: await tone(seconds), mime: "audio/mpeg" }, costUsd: 0 };
   },
 };

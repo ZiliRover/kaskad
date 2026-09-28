@@ -37,7 +37,7 @@ export interface NodeState {
   } | null;
   output: {
     id: string;
-    kind: "text" | "image" | "video";
+    kind: "text" | "image" | "video" | "audio";
     url: string | null;
     mime: string | null;
     text: string | null;
@@ -56,7 +56,7 @@ export interface OutputVersion {
   nodeId: string;
   /** storage key, lets a result be reused as an upload (gallery drag) */
   fileKey: string | null;
-  kind: "text" | "image" | "video";
+  kind: "text" | "image" | "video" | "audio";
   url: string | null;
   mime: string | null;
   text: string | null;

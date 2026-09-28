@@ -16,7 +16,7 @@ import { NodeShell } from "./NodeShell";
 import { ParamField } from "./ParamField";
 import { ResultView } from "./ResultView";
 
-const KIND_LABEL: Record<MediaKind, string> = { image: "Картинка", video: "Видео", text: "Текст" };
+const KIND_LABEL: Record<MediaKind, string> = { image: "Картинка", video: "Видео", text: "Текст", audio: "Озвучка" };
 
 /** The node still has the model and settings of its last run, so that run's price is the price. */
 function sameSettings(a: Record<string, unknown>, b: Record<string, unknown>): boolean {

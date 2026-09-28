@@ -3,6 +3,7 @@ import {
   bigint, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { GraphDoc } from "@/lib/graph/types";
+import type { AppField } from "@/lib/apps";
 import type { JobInput } from "@/lib/jobs";
 
 export const jobStatus = pgEnum("job_status", [
@@ -16,6 +17,8 @@ export const graphs = pgTable("graphs", {
   id: text("id").primaryKey(),
   /** set once accounts land; null = the pre-accounts shared graph */
   ownerId: text("owner_id"),
+  /** a runner's private copy of a published app; hidden from the project list */
+  appId: uuid("app_id"),
   name: text("name").notNull(),
   doc: jsonb("doc").$type<GraphDoc>().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -144,5 +147,22 @@ export const payments = pgTable("payments", {
   paidAt: timestamp("paid_at", { withTimezone: true }),
 }, (t) => [index("payments_user_idx").on(t.userId, t.createdAt)]);
 
+/**
+ * A graph published as an app: a frozen copy of the graph, the inputs people fill in
+ * and the nodes whose results they get. Runners pay for their own runs.
+ */
+export const apps = pgTable("apps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sourceGraphId: text("source_graph_id"),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  doc: jsonb("doc").$type<GraphDoc>().notNull(),
+  fields: jsonb("fields").$type<AppField[]>().notNull(),
+  outputs: jsonb("outputs").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt)]);
+
+export type AppRow = typeof apps.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;

@@ -8,6 +8,7 @@ import type { GraphState } from "@/lib/jobs";
 import type { Fx } from "@/lib/money";
 import type { ProjectSummary } from "@/lib/projects";
 import { formatKop } from "@/lib/money";
+import { AppPublish } from "./AppPublish";
 import { Billing } from "./Billing";
 import { Canvas } from "./Canvas";
 import { CompareView, SelectionBar } from "./Compare";
@@ -79,6 +80,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
       <Templates />
       <Billing />
       <CompareView />
+      <AppPublish graphId={graphId} projectName={graphName} />
       <Toasts />
       <ConfirmDialog />
       <Lightbox />

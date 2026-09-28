@@ -63,6 +63,7 @@ export interface StudioStore {
   billingOpen: boolean;
   /** nodes shown side by side in the compare view; empty = closed */
   compareIds: string[];
+  publishOpen: boolean;
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -86,7 +87,7 @@ export interface StudioStore {
   groupSelection(): void;
   /** Drop a template next to the existing graph; returns the new node ids */
   insertTemplate(t: Template): string[];
-  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean; billingOpen?: boolean; compareIds?: string[] }): void;
+  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean; billingOpen?: boolean; compareIds?: string[]; publishOpen?: boolean }): void;
   /** Copies of a model node with other models on the same inputs, stacked under it; returns all ids */
   compareWith(nodeId: string, modelIds: string[]): string[];
   refreshBalance(): Promise<void>;
@@ -298,6 +299,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   account: null,
   billingOpen: false,
   compareIds: [],
+  publishOpen: false,
   blockedVendors: [],
 
   setPanel(p) {

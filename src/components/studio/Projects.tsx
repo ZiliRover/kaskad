@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretDownIcon, CopyIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { AppWindowIcon, CaretDownIcon, CopyIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectSummary } from "@/lib/projects";
 import { authLost, flushPendingSave, useStudio } from "./store";
@@ -42,6 +42,8 @@ async function send(url: string, method: string, body?: unknown) {
 export function Projects({ currentId, initialName, initial }: { currentId: string; initialName: string; initial: ProjectSummary[] }) {
   const toast = useStudio((s) => s.toast);
   const ask = useStudio((s) => s.ask);
+  const setPanel = useStudio((s) => s.setPanel);
+  const [apps, setApps] = useState<{ id: string; name: string; sourceGraphId: string | null }[]>([]);
   const [openMenu, setOpenMenu] = useState(false);
   const [list, setList] = useState(initial);
   const [name, setName] = useState(initialName);
@@ -54,6 +56,7 @@ export function Projects({ currentId, initialName, initial }: { currentId: strin
     if (!openMenu) return;
     // fresh list each time: another tab may have added or renamed something
     fetch("/api/graphs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((l) => { if (l) setList(l); }).catch(() => {});
+    fetch("/api/apps", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((l) => { if (l) setApps(l); }).catch(() => {});
     const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) { setOpenMenu(false); setEditing(null); } };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpenMenu(false); setEditing(null); } };
     window.addEventListener("pointerdown", away);
@@ -146,6 +149,29 @@ export function Projects({ currentId, initialName, initial }: { currentId: strin
               </li>
             ))}
           </ul>
+          <div className="projects-apps">
+            <button type="button" className="projects-publish" onClick={() => { setOpenMenu(false); setPanel({ publishOpen: true }); }}>
+              <AppWindowIcon size={14} aria-hidden />Сделать приложение из этого проекта
+            </button>
+            {apps.filter((a) => a.sourceGraphId === currentId).map((a) => (
+              <div key={a.id} className="projects-app">
+                <a href={`/app/${a.id}`} target="_blank" rel="noreferrer">{a.name}</a>
+                <button type="button" className="icon-btn" title="Скопировать ссылку" aria-label={`Ссылка на «${a.name}»`}
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/app/${a.id}`).then(() => toast("Ссылка скопирована"))}>
+                  <CopyIcon size={13} aria-hidden />
+                </button>
+                <button type="button" className="icon-btn" title="Снять с публикации" aria-label={`Снять «${a.name}»`}
+                  onClick={() => void act(async () => {
+                    const ok = await ask({ title: `Снять «${a.name}» с публикации?`, body: "Ссылка перестанет работать. Результаты, которые люди уже получили, останутся у них.", confirm: "Снять" });
+                    if (!ok) return;
+                    await send(`/api/apps/${a.id}`, "DELETE");
+                    setApps((l) => l.filter((x) => x.id !== a.id));
+                  })}>
+                  <TrashIcon size={13} aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

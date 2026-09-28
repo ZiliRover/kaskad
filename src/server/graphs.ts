@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { defaultModel, defaultParams, getModel, isBlocked, reconcileParams } from "@/lib/models/registry";
 import { blockedVendors } from "./providers";
 import type { GraphDoc } from "@/lib/graph/types";
@@ -49,7 +49,8 @@ function starterDoc(): GraphDoc {
 
 /** The canvas a user opens: their most recently edited one, created on first visit. */
 export async function userGraph(userId: string) {
-  const [row] = await db.select().from(graphs).where(eq(graphs.ownerId, userId)).orderBy(desc(graphs.updatedAt)).limit(1);
+  const [row] = await db.select().from(graphs).where(and(eq(graphs.ownerId, userId), isNull(graphs.appId)))
+    .orderBy(desc(graphs.updatedAt)).limit(1);
   if (row) return row;
   const [created] = await db.insert(graphs)
     .values({ id: randomUUID(), ownerId: userId, name: "Без названия", doc: starterDoc() })
@@ -67,7 +68,7 @@ export async function ownedGraph(id: string, userId: string) {
 /** The user's canvases, most recently edited first. */
 export async function listProjects(userId: string): Promise<ProjectSummary[]> {
   const rows = await db.select({ id: graphs.id, name: graphs.name, updatedAt: graphs.updatedAt, doc: graphs.doc })
-    .from(graphs).where(eq(graphs.ownerId, userId)).orderBy(desc(graphs.updatedAt));
+    .from(graphs).where(and(eq(graphs.ownerId, userId), isNull(graphs.appId))).orderBy(desc(graphs.updatedAt));
   return rows.map((r) => ({
     id: r.id, name: r.name, updatedAt: r.updatedAt.toISOString(),
     nodes: r.doc.nodes.filter((n) => n.type !== "note" && n.type !== "group").length,

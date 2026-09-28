@@ -88,6 +88,27 @@ export async function tone(seconds: number): Promise<Uint8Array> {
   });
 }
 
+function hsl(h: number, sPct: number, lPct: number): string {
+  const S = sPct / 100, L = lPct / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const f = (n: number) => L - S * Math.min(L, 1 - L) * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return "0x" + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+}
+
+/** Test-mode stand-in for a generated image: a gradient PNG labelled with its prompt. */
+export async function placeholderPng(prompt: string, aspect: string, hue: number): Promise<Uint8Array> {
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect);
+  const r = m ? Number(m[1]) / Number(m[2]) : 16 / 9;
+  const W = 1024, H = even(W / r);
+  return withTmp(async (dir) => {
+    const base = path.join(dir, "base.png");
+    await exec(FFMPEG, ["-v", "error", "-f", "lavfi", "-i",
+      `gradients=s=${W}x${H}:c0=${hsl(hue, 45, 22)}:c1=${hsl((hue + 70) % 360, 55, 38)}:x0=0:y0=0:x1=${W}:y1=${H}:duration=1`,
+      "-frames:v", "1", "-update", "1", "-y", base]);
+    return caption(base, "image", `Тестовая генерация. ${prompt}`.slice(0, 200), { position: "bottom", size: "s", look: "shadow" });
+  });
+}
+
 // ---------------------------------------------------------------- editing tools
 
 const H264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart"];

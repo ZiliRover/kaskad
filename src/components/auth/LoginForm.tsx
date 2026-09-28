@@ -14,7 +14,7 @@ async function post(url: string, body: unknown) {
   return data;
 }
 
-export function LoginForm({ bonusKop }: { bonusKop: number }) {
+export function LoginForm({ bonusKop, next = "/studio" }: { bonusKop: number; next?: string }) {
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -49,7 +49,7 @@ export function LoginForm({ bonusKop }: { bonusKop: number }) {
     setBusy(true); setError(null);
     try {
       await post("/api/auth/verify", { email, code: value });
-      window.location.replace("/studio");
+      window.location.replace(next);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

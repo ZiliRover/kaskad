@@ -23,7 +23,7 @@ export function toRub(usd: number, fx: Fx): number {
 
 /** What the user is charged, in kopecks (rounded up: never undercharge a fraction). */
 export function toKop(usd: number, fx: Fx): number {
-  return Math.ceil(toRub(usd, fx) * 100 - 1e-6);
+  return Math.max(0, Math.ceil(toRub(usd, fx) * 100 - 1e-6));
 }
 
 /** 123456 kop -> "1 234,56 ₽" (whole rubles when there are no kopecks) */

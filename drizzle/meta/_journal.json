@@ -36,6 +36,13 @@
       "when": 1790628025522,
       "tag": "0004_audio_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790628252695,
+      "tag": "0005_apps",
+      "breakpoints": true
     }
   ]
 }

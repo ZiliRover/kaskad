@@ -5,7 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { tone } from "../tools";
+import { placeholderPng, tone } from "../tools";
 import { ProviderError, type Provider } from "./types";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -13,36 +13,10 @@ const VIDEO_MS = 12_000;
 const SAMPLE_VIDEO = process.env.MOCK_VIDEO_PATH
   ?? path.join(/* turbopackIgnore: true */ process.cwd(), "prototype/web/outputs/seedance-1790096361.mp4");
 
-const escapeXml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
 function hue(s: string): number {
   let h = 0;
   for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 360;
   return h;
-}
-
-function placeholderSvg(prompt: string, aspect: string): string {
-  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect);
-  const r = m ? Number(m[1]) / Number(m[2]) : 16 / 9;
-  const w = 1024, h = Math.round(w / r);
-  const a = hue(prompt), b = (a + 70) % 360;
-  const words = prompt.split(/\s+/);
-  const lines: string[] = [];
-  let cur = "";
-  for (const wd of words) {
-    if ((cur + " " + wd).trim().length > 38) { lines.push(cur.trim()); cur = wd; } else cur += " " + wd;
-    if (lines.length === 4) break;
-  }
-  if (lines.length < 4 && cur.trim()) lines.push(cur.trim());
-  const text = lines.map((l, i) =>
-    `<text x="56" y="${h - 56 - (lines.length - 1 - i) * 34}" font-family="sans-serif" font-size="26" fill="rgba(255,255,255,.88)">${escapeXml(l)}</text>`,
-  ).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${a} 45% 22%)"/><stop offset="1" stop-color="hsl(${b} 55% 38%)"/></linearGradient></defs>
-<rect width="100%" height="100%" fill="url(#g)"/>
-<text x="56" y="80" font-family="monospace" font-size="20" fill="rgba(255,255,255,.55)">Тестовая генерация</text>
-${text}</svg>`;
 }
 
 function maybeFail(prompt: string) {
@@ -57,9 +31,10 @@ export const mockProvider: Provider = {
     await sleep(1800);
     maybeFail(req.prompt);
     const n = Math.max(1, Number.parseInt(String(req.params.n ?? 1), 10) || 1);
-    const images = Array.from({ length: n }, (_, i) => ({
-      bytes: new TextEncoder().encode(placeholderSvg(`${req.prompt}${n > 1 ? ` (вариант ${i + 1})` : ""}`, String(req.params.aspect_ratio ?? "16:9"))),
-      mime: "image/svg+xml",
+    // real PNGs, so the editing tools downstream work in test mode too
+    const images = await Promise.all(Array.from({ length: n }, async (_, i) => {
+      const text = `${req.prompt}${n > 1 ? ` (вариант ${i + 1})` : ""}`;
+      return { bytes: await placeholderPng(text, String(req.params.aspect_ratio ?? "16:9"), hue(text)), mime: "image/png" };
     }));
     return { images, costUsd: 0 };
   },

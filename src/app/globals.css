@@ -901,12 +901,12 @@ button.side-title:hover { color: var(--text-2); }
 .edge-run.is-flow .edge-run-track {
   stroke: var(--run); stroke-width: 3;
   filter: drop-shadow(0 0 3px var(--run));
-  animation: edge-breathe 1.6s ease-in-out infinite;
+  animation: edge-breathe 2.1s ease-in-out infinite;
 }
 .edge-run.is-flow .edge-run-halo,
 .edge-run.is-flow .edge-run-pulse {
   stroke-dasharray: 5 15;
-  animation: edge-flow 0.9s linear infinite;
+  animation: edge-flow 1.17s linear infinite;
 }
 .edge-run.is-flow .edge-run-halo {
   stroke: var(--run); stroke-width: 11; opacity: .35;
@@ -925,7 +925,7 @@ button.side-title:hover { color: var(--text-2); }
   stroke: var(--run); stroke-width: 3;
   stroke-dasharray: 1.5 3.5;
   filter: drop-shadow(0 0 2px var(--run));
-  animation: edge-flow 3s linear infinite;
+  animation: edge-flow 3.9s linear infinite;
 }
 
 @keyframes edge-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
@@ -934,15 +934,23 @@ button.side-title:hover { color: var(--text-2); }
 /* the node doing the work now glows; queued nodes on the route are outlined */
 .node.is-running {
   border-color: var(--accent-line);
-  animation: node-glow 1.6s ease-in-out infinite;
+  animation: node-glow 2.1s ease-in-out infinite;
 }
 @keyframes node-glow {
   0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px -4px var(--accent-line), var(--shadow); }
   50% { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 36px -2px var(--accent-line), var(--shadow); }
 }
 .node.is-queued { outline: 1.5px dashed var(--accent-line); outline-offset: 4px; }
+/* generating: a light strip runs along the header's bottom edge */
+.node.is-running .node-head::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-strong) 50%, transparent 100%) 0 0 / 40% 100% no-repeat;
+  animation: node-loading 1.6s ease-in-out infinite;
+}
+@keyframes node-loading { from { background-position: -70% 0; } to { background-position: 170% 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .edge-run path, .node.is-running { animation: none; }
+  .edge-run path, .node.is-running, .node.is-running .node-head::after { animation: none; }
 }
 .balance-tag { font-size: 11px; font-weight: 550; color: var(--text-3); }

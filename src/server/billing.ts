@@ -9,6 +9,7 @@
 import { sql } from "drizzle-orm";
 import { toKop, type Fx } from "@/lib/money";
 import type { MediaKind } from "@/lib/models/types";
+import { isAdmin } from "./admin";
 import { db } from "./db";
 
 // drizzle's transaction type is awkward to name; both db and tx expose execute()
@@ -52,8 +53,8 @@ export async function addHold(tx: Exec, userId: string, jobId: string, kop: numb
  * Safe to call more than once; a late cost after cancel still gets charged once.
  */
 export async function settleJob(tx: Exec, jobId: string, costUsd: number | null, fx: Fx | null) {
-  const [job] = await tx.execute<{ user_id: string | null; hold_kop: string; model_id: string }>(sql`
-    select user_id, hold_kop, model_id from jobs where id = ${jobId}
+  const [job] = await tx.execute<{ user_id: string | null; hold_kop: string; model_id: string; email: string | null }>(sql`
+    select j.user_id, j.hold_kop, j.model_id, u.email from jobs j left join users u on u.id = j.user_id where j.id = ${jobId}
   `);
   if (!job?.user_id) return; // jobs from before accounts
   const hold = Number(job.hold_kop);
@@ -63,7 +64,8 @@ export async function settleJob(tx: Exec, jobId: string, costUsd: number | null,
       on conflict do nothing
     `);
   }
-  if (costUsd && costUsd > 0 && fx) {
+  // operators pay the provider directly; their site balance stays untouched
+  if (costUsd && costUsd > 0 && fx && !(job.email && isAdmin({ email: job.email }))) {
     await tx.execute(sql`
       insert into ledger (user_id, amount_kop, kind, job_id, note)
       values (${job.user_id}, ${-toKop(costUsd, fx)}, 'charge', ${jobId}, ${job.model_id})

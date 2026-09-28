@@ -874,19 +874,13 @@ button.side-title:hover { color: var(--text-2); }
 .bh-date { grid-row: 2; color: var(--text-3); font-size: 11.5px; }
 .bh-amount { grid-row: 1 / 3; grid-column: 2; align-self: center; font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--text-2); }
 .bh-amount.is-plus { color: var(--ok); }
-.provider-balance {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-2);
-  padding: 0 4px; cursor: help;
-}
-.provider-balance-label { font-size: 11px; font-weight: 550; color: var(--text-3); }
 
 /* narrow windows: the header keeps one line; secondary labels go first */
 .topbar { gap: 12px; }
 .tb-left { min-width: 0; }
 .graph-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tb-right { flex: none; }
-.badge, .provider-balance { white-space: nowrap; }
+.badge { white-space: nowrap; }
 @media (max-width: 1180px) {
   .tb-label { display: none; }
   .tb-right .btn-ghost:has(.tb-label) { padding: 0 9px; }
@@ -897,38 +891,58 @@ button.side-title:hover { color: var(--text-2); }
 
 /* ---------------------------------------------------------------- run on the wires */
 
-.edge-run { pointer-events: none; fill: none; --run: var(--t-text); }
+.edge-run { pointer-events: none; --run: var(--t-text); }
 .edge-run.t-image { --run: var(--t-image); }
 .edge-run.t-video { --run: var(--t-video); }
 .edge-run.t-audio { --run: var(--t-audio); }
 .edge-run path { fill: none; stroke-linecap: round; }
-/* the wire itself lights up in its data colour */
-.edge-run-track { stroke: var(--run); stroke-width: 2; opacity: .9; }
-.edge-run.is-pending .edge-run-track { opacity: .35; }
-/* flow: two comets travelling into the node that is generating */
-.edge-run.is-flow .edge-run-pulse {
-  stroke: var(--run);
-  stroke-width: 4.5;
-  stroke-dasharray: 7 43;
-  filter: drop-shadow(0 0 4px var(--run));
-  animation: edge-flow 1.5s linear infinite;
-}
-/* pending: the route still ahead, marching slowly towards the target */
-.edge-run.is-pending .edge-run-pulse {
-  stroke: var(--run);
-  stroke-width: 2;
-  stroke-dasharray: 1.2 3;
-  opacity: .8;
-  animation: edge-flow 6s linear infinite;
-}
-@keyframes edge-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
 
-/* the node doing the work now */
+/* flow: the target is generating, energy streams into it */
+.edge-run.is-flow .edge-run-track {
+  stroke: var(--run); stroke-width: 3;
+  filter: drop-shadow(0 0 3px var(--run));
+  animation: edge-breathe 1.6s ease-in-out infinite;
+}
+.edge-run.is-flow .edge-run-halo,
+.edge-run.is-flow .edge-run-pulse {
+  stroke-dasharray: 5 15;
+  animation: edge-flow 0.9s linear infinite;
+}
+.edge-run.is-flow .edge-run-halo {
+  stroke: var(--run); stroke-width: 11; opacity: .35;
+  filter: blur(3px);
+}
+/* hot white-ish core of each pulse */
+.edge-run.is-flow .edge-run-pulse {
+  stroke: color-mix(in srgb, var(--run) 35%, #fff); stroke-width: 4;
+  filter: drop-shadow(0 0 5px var(--run)) drop-shadow(0 0 2px var(--run));
+}
+
+/* pending: the route still ahead, marching towards the target */
+.edge-run.is-pending .edge-run-track { stroke: var(--run); stroke-width: 2.5; opacity: .3; }
+.edge-run.is-pending .edge-run-halo { display: none; }
+.edge-run.is-pending .edge-run-pulse {
+  stroke: var(--run); stroke-width: 3;
+  stroke-dasharray: 1.5 3.5;
+  filter: drop-shadow(0 0 2px var(--run));
+  animation: edge-flow 3s linear infinite;
+}
+
+@keyframes edge-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes edge-breathe { 50% { opacity: .55; } }
+
+/* the node doing the work now glows; queued nodes on the route are outlined */
 .node.is-running {
   border-color: var(--accent-line);
-  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+  animation: node-glow 1.6s ease-in-out infinite;
 }
+@keyframes node-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px -4px var(--accent-line), var(--shadow); }
+  50% { box-shadow: 0 0 0 5px var(--accent-soft), 0 0 36px -2px var(--accent-line), var(--shadow); }
+}
+.node.is-queued { outline: 1.5px dashed var(--accent-line); outline-offset: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .edge-run .edge-run-pulse { animation: none; }
+  .edge-run path, .node.is-running { animation: none; }
 }
+.balance-tag { font-size: 11px; font-weight: 550; color: var(--text-3); }

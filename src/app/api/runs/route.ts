@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { graphDoc } from "@/lib/graph/types";
+import { isAdmin } from "@/server/admin";
 import { requireUser } from "@/server/auth";
 import { ownedGraph } from "@/server/graphs";
 import { createRun } from "@/server/runs";
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   const { graphId, doc, targets, mode } = parsed.data;
   if (!(await ownedGraph(graphId, user.id))) return NextResponse.json({ error: "Граф не найден" }, { status: 404 });
 
-  const r = await createRun(graphId, user.id, doc, targets, mode);
+  const r = await createRun(graphId, user.id, doc, targets, mode, isAdmin(user));
   if (!r.ok) return NextResponse.json(r, { status: r.code === "funds" ? 402 : 422 });
   return NextResponse.json(r);
 }

@@ -37,23 +37,30 @@ function AccountMenu() {
 
   return (
     <>
-      {account.admin && account.providerUsd !== null && (
-        <span
-          className="provider-balance"
-          title={`${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ без наценки. Из него оплачиваются все генерации. Видно только администратору.`}
+      {account.admin ? (
+        // operators spend the provider account directly: that is their balance
+        <button
+          type="button"
+          className="btn btn-ghost balance-chip"
+          title={account.providerUsd === null
+            ? "Баланс OpenRouter недоступен (нет ключа или сети)"
+            : `${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ. Генерации администратора идут без лимита и не списываются с баланса сайта. Этот баланс видят только администраторы.`}
+          onClick={() => setPanel({ billingOpen: true })}
         >
-          <span className="provider-balance-label">OpenRouter</span>
-          {formatKop(Math.round(account.providerUsd * fx.usdRub) * 100)}
-        </span>
+          <WalletIcon size={15} aria-hidden />
+          <span className="balance-tag">OpenRouter</span>
+          {account.providerUsd === null ? "—" : formatKop(Math.round(account.providerUsd * fx.usdRub) * 100)}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`btn btn-ghost balance-chip${account.availableKop <= 0 ? " is-empty" : ""}`}
+          title={account.reservedKop > 0 ? `Ещё ${formatKop(account.reservedKop)} в резерве у идущих генераций` : "Баланс и пополнение"}
+          onClick={() => setPanel({ billingOpen: true })}
+        >
+          <WalletIcon size={15} aria-hidden />{formatKop(Math.max(0, account.availableKop))}
+        </button>
       )}
-      <button
-        type="button"
-        className={`btn btn-ghost balance-chip${account.availableKop <= 0 ? " is-empty" : ""}`}
-        title={account.reservedKop > 0 ? `Ещё ${formatKop(account.reservedKop)} в резерве у идущих генераций` : "Баланс и пополнение"}
-        onClick={() => setPanel({ billingOpen: true })}
-      >
-        <WalletIcon size={15} aria-hidden />{formatKop(Math.max(0, account.availableKop))}
-      </button>
       <div className="enhance" ref={ref}>
         <button
           type="button" className="icon-btn tb-icon" aria-label="Аккаунт" aria-haspopup="menu" aria-expanded={open}

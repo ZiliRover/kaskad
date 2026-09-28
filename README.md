@@ -88,7 +88,7 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `BLOCKED_VENDORS` | | vendors that refuse the server's region, e.g. `google` from Russia; their models are marked unavailable |
 | `PUBLIC_BASE_URL` | | public https address of the server; providers download video/audio inputs by signed link |
 | `FILE_URL_SECRET` | derived | secret for those signed links |
-| `ADMIN_EMAILS` | everyone in dev | operators; they also see the OpenRouter account balance in rubles |
+| `ADMIN_EMAILS` | | operators: generate without a balance limit and see the OpenRouter balance instead of their own |
 | `PRICE_MARKUP` | `1.5` | user price = provider cost × Central Bank rate × markup |
 | `WELCOME_BONUS_RUB` | `50` | credited once to each new account |
 | `SMTP_URL` / `MAIL_FROM` | | mail for login codes (`smtps://user:pass@host:465`); without it, dev prints codes to the console |

@@ -29,6 +29,7 @@ export const FlowEdge = memo(function FlowEdge({
       {phase && (
         <g className={`edge-run is-${phase} t-${dtype}`} aria-hidden>
           <path d={path} className="edge-run-track" pathLength={100} />
+          <path d={path} className="edge-run-halo" pathLength={100} />
           <path d={path} className="edge-run-pulse" pathLength={100} />
         </g>
       )}

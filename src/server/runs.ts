@@ -22,6 +22,8 @@ export type CreateRunResult =
  */
 export async function createRun(
   graphId: string, userId: string, doc: GraphDoc, targets: string[], mode: "missing" | "all",
+  /** operators generate straight from the provider account: nothing is reserved or charged */
+  unlimited = false,
 ): Promise<CreateRunResult> {
   // a document may only feed the worker files its author can read
   for (const n of doc.nodes) {
@@ -62,14 +64,14 @@ export async function createRun(
     }
     if (!plan.jobs.length) return { ok: false as const, nodeId: targets[0] ?? "", error: "Нода уже генерируется" };
 
-    const holds = plan.jobs.map((pj) =>
-      holdKop(pj.estimate.usd, pj.kind, fx, getModel(pj.modelId)?.pricing.type === "free"));
+    const holds = plan.jobs.map((pj) => unlimited ? 0
+      : holdKop(pj.estimate.usd, pj.kind, fx, getModel(pj.modelId)?.pricing.type === "free"));
     const need = holds.reduce((a, b) => a + b, 0);
 
     // serialize spending per user: two tabs must not both spend the same rubles
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`user:${userId}`}))`);
     const balance = await balanceKop(userId, tx);
-    if (need > balance) {
+    if (!unlimited && need > balance) {
       return {
         ok: false as const, nodeId: plan.jobs[0].nodeId, code: "funds" as const, needKop: need, balanceKop: balance,
         error: `Не хватает средств: запуск резервирует ${formatKop(need)}, на балансе ${formatKop(Math.max(0, balance))}.`,

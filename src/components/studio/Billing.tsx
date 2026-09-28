@@ -2,7 +2,7 @@
 
 import { XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { formatKop } from "@/lib/money";
+import { formatKop, formatUsd } from "@/lib/money";
 import { getModel } from "@/lib/models/registry";
 import { authLost, useStudio } from "./store";
 
@@ -23,6 +23,7 @@ function entryLabel(e: Entry): string {
 export function Billing() {
   const open = useStudio((s) => s.billingOpen);
   const account = useStudio((s) => s.account);
+  const fx = useStudio((s) => s.fx);
   const setPanel = useStudio((s) => s.setPanel);
   const [history, setHistory] = useState<Entry[] | null>(null);
   const [amount, setAmount] = useState("1000");
@@ -80,7 +81,22 @@ export function Billing() {
           </button>
         </div>
 
+        {account.admin && (
+          <div className="billing-balance">
+            <span className="auth-label">OpenRouter</span>
+            <span className="billing-amount">
+              {account.providerUsd === null ? "—" : formatKop(Math.round(account.providerUsd * fx.usdRub) * 100)}
+            </span>
+            <span className="billing-reserved">
+              {account.providerUsd === null ? "Не удалось получить баланс OpenRouter." : `${formatUsd(account.providerUsd)} по курсу ЦБ. `}
+              Ты администратор: генерации идут без лимита и не списываются с баланса сайта.
+              Этот блок видят только администраторы.
+            </span>
+          </div>
+        )}
+
         <div className="billing-balance">
+          {account.admin && <span className="auth-label">Баланс на сайте</span>}
           <span className={`billing-amount${account.availableKop < 0 ? " is-negative" : ""}`}>{formatKop(account.availableKop)}</span>
           {account.reservedKop > 0 && (
             <span className="billing-reserved">

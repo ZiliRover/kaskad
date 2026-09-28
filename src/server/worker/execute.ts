@@ -4,7 +4,7 @@ import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
 import { db, outputs, type JobRow } from "../db";
 import { getProvider, providerMode, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
-import { concatVideos, extractFrame } from "../tools";
+import { addAudio, caption, concatVideos, extractFrame, reframe, speedVideo, trimVideo, type CaptionStyle } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
 
 const VIDEO_POLL_MS = 5_000;
@@ -109,6 +109,34 @@ async function runTool(job: JobRow) {
     const mp4 = await concatVideos(await resolvePaths(job, ports.clips));
     await completeJob(job, [{ fileKey: await store(job, mp4, "video/mp4"), mime: "video/mp4" }], 0);
     return;
+  }
+  const one = async (key: string, what: string) => {
+    const [file] = await resolvePaths(job, ports[key]);
+    if (!file) throw new InputError(`Подключи ${what}`);
+    return file;
+  };
+  const out = async (bytes: Uint8Array, mime: string) =>
+    completeJob(job, [{ fileKey: await store(job, bytes, mime), mime }], 0);
+  const p = (k: string) => String(params[k] ?? "");
+  switch (job.modelId) {
+    case "kaskad/trim":
+      return out(await trimVideo(await one("video", "видео"), Number(p("start")) || 0, p("length") === "all" ? null : Number(p("length")) || null), "video/mp4");
+    case "kaskad/speed":
+      return out(await speedVideo(await one("video", "видео"), Number(p("factor")) || 1), "video/mp4");
+    case "kaskad/add-audio":
+      return out(await addAudio(await one("video", "видео"), await one("audio", "звук"), p("mode") === "mix" ? "mix" : "replace"), "video/mp4");
+    case "kaskad/reframe-video":
+      return out(await reframe(await one("video", "видео"), "video", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "video/mp4");
+    case "kaskad/reframe-image":
+      return out(await reframe(await one("image", "картинку"), "image", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "image/png");
+    case "kaskad/caption-image":
+    case "kaskad/caption-video": {
+      const kind = job.modelId === "kaskad/caption-image" ? "image" : "video";
+      const style = { position: p("position"), size: p("size"), look: p("look") } as CaptionStyle;
+      const text = await resolveText(job, ports.prompt);
+      const file = await one(kind, kind === "image" ? "картинку" : "видео");
+      return out(await caption(file, kind, text, style), kind === "image" ? "image/png" : "video/mp4");
+    }
   }
   throw new InputError("Неизвестный инструмент");
 }

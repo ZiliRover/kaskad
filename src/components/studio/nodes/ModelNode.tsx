@@ -163,7 +163,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
                     title="Добавить ноду «Промт» и подключить сюда"
                     onClick={() => addPromptFor(id)}
                   >
-                    <PlusIcon size={11} weight="bold" aria-hidden />{spec.promptOptional ? "промт, если нужен" : "добавить промт"}
+                    <PlusIcon size={11} weight="bold" aria-hidden />{spec.promptOptional ? `${p.label.toLowerCase()}, если нужен` : `добавить ${p.label.toLowerCase()}`}
                   </button>
                 ) : (
                   <span className="port-meta">{meta}</span>

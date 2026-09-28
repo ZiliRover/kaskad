@@ -143,6 +143,17 @@ function splitName(raw: string): { vendor: string; name: string } {
  * last frame of clip A -> first frame of clip B -> join A and B.
  */
 export const TOOL_PREFIX = "kaskad/";
+
+const enumParam = (key: string, label: string, def: string, options: [string, string][]): ParamSpec =>
+  ({ key, label, type: "enum", default: def, options: options.map(([value, l]) => ({ value, label: l })) });
+const ASPECT_PARAM = enumParam("aspect", "Формат", "9:16", [["9:16", "9:16"], ["3:4", "3:4"], ["4:5", "4:5"], ["1:1", "1:1"], ["16:9", "16:9"]]);
+const FILL_PARAM = enumParam("fill", "Лишнее место", "crop", [["crop", "Обрезать края"], ["blur", "Размытый фон"]]);
+const CAPTION_PARAMS: ParamSpec[] = [
+  enumParam("position", "Где", "bottom", [["top", "Сверху"], ["center", "По центру"], ["bottom", "Снизу"]]),
+  enumParam("size", "Размер", "m", [["s", "Мелкий"], ["m", "Средний"], ["l", "Крупный"]]),
+  enumParam("look", "Стиль", "shadow", [["shadow", "Белый с тенью"], ["plate", "На плашке"]]),
+];
+
 const TOOLS: ModelSpec[] = [
   {
     id: "kaskad/last-frame", kind: "image", group: "tools", name: "Кадр из видео", vendor: "Каскад",
@@ -161,6 +172,74 @@ const TOOLS: ModelSpec[] = [
     caps: { ...NO_CAPS, sourceVideo: true },
     inputs: [{ key: "clips", dtype: "video", label: "Ролики", max: 8, min: 2, hint: "по порядку подключения" }],
     params: [],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/trim", kind: "video", group: "tools", name: "Обрезка видео", vendor: "Каскад",
+    blurb: "Кусок ролика: с какой секунды и сколько", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [{ key: "video", dtype: "video", label: "Видео", max: 1, min: 1 }],
+    params: [
+      enumParam("start", "Начало", "0", [["0", "с 0 с"], ["0.5", "с 0,5 с"], ["1", "с 1 с"], ["2", "с 2 с"], ["3", "с 3 с"], ["5", "с 5 с"], ["8", "с 8 с"], ["10", "с 10 с"]]),
+      enumParam("length", "Длительность", "all", [["all", "до конца"], ["1", "1 с"], ["2", "2 с"], ["3", "3 с"], ["4", "4 с"], ["5", "5 с"], ["8", "8 с"], ["10", "10 с"], ["15", "15 с"]]),
+    ],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/speed", kind: "video", group: "tools", name: "Скорость видео", vendor: "Каскад",
+    blurb: "Замедлить или ускорить ролик, звук без искажений", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [{ key: "video", dtype: "video", label: "Видео", max: 1, min: 1 }],
+    params: [enumParam("factor", "Скорость", "0.75", [["0.5", "0,5× (вдвое медленнее)"], ["0.75", "0,75×"], ["1.25", "1,25×"], ["1.5", "1,5×"], ["2", "2× (вдвое быстрее)"]])],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/add-audio", kind: "video", group: "tools", name: "Звук на видео", vendor: "Каскад",
+    blurb: "Музыка или голос поверх ролика, по длине видео", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [
+      { key: "video", dtype: "video", label: "Видео", max: 1, min: 1 },
+      { key: "audio", dtype: "audio", label: "Звук", max: 1, min: 1 },
+    ],
+    params: [enumParam("mode", "Исходный звук", "replace", [["replace", "Заменить"], ["mix", "Смешать с новым"]])],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/reframe-video", kind: "video", group: "tools", name: "Формат кадра: видео", vendor: "Каскад",
+    blurb: "9:16 для Reels, 3:4 и 1:1 для маркетплейсов", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [{ key: "video", dtype: "video", label: "Видео", max: 1, min: 1 }],
+    params: [ASPECT_PARAM, FILL_PARAM],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/reframe-image", kind: "image", group: "tools", name: "Формат кадра: картинка", vendor: "Каскад",
+    blurb: "Та же картинка в 9:16, 3:4, 1:1 или 16:9", featured: false, promptOptional: true,
+    caps: NO_CAPS,
+    inputs: [{ key: "image", dtype: "image", label: "Картинка", max: 1, min: 1 }],
+    params: [ASPECT_PARAM, FILL_PARAM],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/caption-image", kind: "image", group: "tools", name: "Текст на картинку", vendor: "Каскад",
+    blurb: "Надпись поверх: заголовок, цена, преимущество", featured: false, promptOptional: false,
+    caps: NO_CAPS,
+    inputs: [
+      { key: "image", dtype: "image", label: "Картинка", max: 1, min: 1 },
+      { key: "prompt", dtype: "text", label: "Текст", max: 1, min: 1 },
+    ],
+    params: CAPTION_PARAMS,
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/caption-video", kind: "video", group: "tools", name: "Текст на видео", vendor: "Каскад",
+    blurb: "Надпись поверх ролика на всю длину", featured: false, promptOptional: false,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [
+      { key: "video", dtype: "video", label: "Видео", max: 1, min: 1 },
+      { key: "prompt", dtype: "text", label: "Текст", max: 1, min: 1 },
+    ],
+    params: CAPTION_PARAMS,
     pricing: { type: "free" },
   },
 ];

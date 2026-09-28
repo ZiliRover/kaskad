@@ -26,7 +26,8 @@ export default async function StudioPage() {
       initialDoc={graph.doc}
       initialState={await graphState(graph.id)}
       providerMode={providerMode()}
-      fx={fx}
+      // operators see what the provider actually charges; users see their price with the markup
+      fx={admin ? { ...fx, markup: 1 } : fx}
       blockedVendors={blockedVendors()}
       account={{
         email: user.email, availableKop: available, reservedKop: reserved, payments: paymentsProvider(),

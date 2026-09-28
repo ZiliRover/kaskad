@@ -44,7 +44,7 @@ function AccountMenu() {
           className="btn btn-ghost balance-chip"
           title={account.providerUsd === null
             ? "Баланс OpenRouter недоступен (нет ключа или сети)"
-            : `${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ. Генерации администратора идут без лимита и не списываются с баланса сайта. Этот баланс видят только администраторы.`}
+            : `${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ. Генерации администратора идут без лимита и не списываются с баланса сайта, цены на нодах показаны без наценки, как у провайдера. Этот баланс видят только администраторы.`}
           onClick={() => setPanel({ billingOpen: true })}
         >
           <WalletIcon size={15} aria-hidden />

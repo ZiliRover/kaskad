@@ -27,7 +27,7 @@ if not exist node_modules (
 
 if not exist .env (
   copy .env.example .env >nul
-  echo Создан файл .env. Для настоящих генераций впишите в него OPENROUTER_API_KEY и PROVIDER_MODE=live.
+  echo Создан файл .env. Для настоящих генераций впишите в него KASKAD_OPENROUTER_KEY и PROVIDER_MODE=live.
 )
 
 rem open the browser as soon as the site answers

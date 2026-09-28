@@ -8,9 +8,22 @@ const TIMEOUT_MS = 5 * 60_000; // image models can take a couple of minutes
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = Record<string, any>;
 
+/**
+ * Our own variable name first: a machine-wide OPENROUTER_API_KEY set by another tool
+ * silently wins over .env (process env takes precedence), which cost us a debugging session.
+ * trim: a .env saved with Windows line endings leaves a carriage return on the value.
+ */
+export function apiKeySource(): { key: string; from: string } | null {
+  for (const name of ["KASKAD_OPENROUTER_KEY", "OPENROUTER_API_KEY"]) {
+    const v = process.env[name]?.trim();
+    if (v) return { key: v, from: name };
+  }
+  return null;
+}
+
 function key(): string {
-  const k = process.env.OPENROUTER_API_KEY;
-  if (!k) throw new ProviderError("Сервер не настроен: нет ключа OpenRouter");
+  const k = apiKeySource()?.key;
+  if (!k) throw new ProviderError("Сервер не настроен: нет ключа OpenRouter (KASKAD_OPENROUTER_KEY)");
   return k;
 }
 
@@ -29,12 +42,60 @@ function providerMessage(data: Json | null): string | null {
   return typeof data?.message === "string" ? data.message : null;
 }
 
+/**
+ * Provider errors that people actually hit (seen in live runs), rewritten as advice.
+ * Checked against the raw provider text, which often embeds another JSON error.
+ */
+const KNOWN: { test: RegExp; message: string }[] = [
+  {
+    test: /PrivacyInformation|may contain real person/i,
+    message: "Модель не принимает кадры, похожие на фото реального человека (фильтр приватности провайдера). Возьми стилизованный кадр или другую модель: Kling, Wan, Hailuo.",
+  },
+  {
+    test: /Blocked by Google|not available in your (country|region)|unsupported.?(country|region|location)/i,
+    message: "Производитель модели не обслуживает запросы из региона сервера (сейчас это Google: Nano Banana, Veo, Gemini). Выбери модель другого производителя.",
+  },
+  {
+    test: /No endpoint found/i,
+    message: "Сейчас у модели нет доступного провайдера для такого запроса, часто из-за региональных ограничений. Выбери другую модель.",
+  },
+  {
+    test: /Only HTTPS URLs are allowed/i,
+    message: "Видео и аудио провайдер принимает только по публичной https-ссылке. Задай PUBLIC_BASE_URL у сервера.",
+  },
+  {
+    test: /SensitiveContent|content.?(policy|moderation)|safety (system|filter)|flagged/i,
+    message: "Провайдер отклонил запрос по правилам контента. Измени промт или входные картинки.",
+  },
+];
+
+/** Innermost human text of a provider error ("HTTP 400: {\"error\":{\"message\":…}}" → message). */
+function innerMessage(detail: string): string {
+  const m = /\{[\s\S]*\}$/.exec(detail);
+  if (!m) return detail;
+  try {
+    const j = JSON.parse(m[0]);
+    return j?.error?.message ?? j?.message ?? detail;
+  } catch {
+    return detail;
+  }
+}
+
+export function humanize(detail: string | null | undefined): string | null {
+  if (!detail) return null;
+  return KNOWN.find((k) => k.test.test(detail))?.message ?? null;
+}
+
 /** Map HTTP failures to messages a user can act on. */
 function failure(status: number, data: Json | null): ProviderError {
-  const detail = providerMessage(data);
+  const raw = providerMessage(data);
+  const known = humanize(raw);
+  if (known) return new ProviderError(known);
+  const detail = raw ? innerMessage(raw) : null;
   switch (status) {
     case 400: return new ProviderError(`Модель отклонила запрос${detail ? `: ${detail}` : ""}`);
-    case 401: case 403: return new ProviderError("Доступ к модели отклонён. Проверьте ключ сервиса.");
+    case 401: return new ProviderError("Ключ OpenRouter не принят. Проверьте KASKAD_OPENROUTER_KEY в .env.");
+    case 403: return new ProviderError(`Провайдер отказал в доступе к модели${detail ? `: ${detail}` : ""}`);
     case 402: return new ProviderError("У сервиса закончился баланс у провайдера. Мы уже разбираемся.");
     case 408: case 504: return new ProviderError("Провайдер не ответил вовремя. Попробуйте ещё раз.", true);
     case 429: return new ProviderError("Провайдер перегружен. Попробуйте через минуту.", true);
@@ -151,7 +212,8 @@ export const openRouter: Provider = {
     const s = d.status;
     if (s === "completed") return { state: "done", costUsd: cost(d) };
     if (s === "failed" || s === "cancelled" || s === "expired") {
-      return { state: "failed", error: `Генерация не удалась${providerMessage(d) ? `: ${providerMessage(d)}` : ""}` };
+      const raw = providerMessage(d);
+      return { state: "failed", error: humanize(raw) ?? `Генерация не удалась${raw ? `: ${innerMessage(raw)}` : ""}` };
     }
     return { state: "pending" };
   },

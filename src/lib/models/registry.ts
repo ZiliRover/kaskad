@@ -202,9 +202,16 @@ export function modelsOfKind(kind: MediaKind): ModelSpec[] {
   return MODELS.filter((m) => m.kind === kind);
 }
 
-/** Default model for a freshly added node of a kind. */
-export function defaultModel(kind: MediaKind): ModelSpec {
-  return modelsOfKind(kind).find((m) => m.group === kind) ?? modelsOfKind(kind)[0];
+/** "google/gemini-3-pro-image" -> "google" */
+export const vendorOf = (modelId: string) => modelId.split("/")[0].toLowerCase();
+
+/** Vendors that refuse requests from the server's region (BLOCKED_VENDORS), e.g. Google from Russia. */
+export const isBlocked = (modelId: string, blocked: readonly string[]) => blocked.includes(vendorOf(modelId));
+
+/** Default model for a freshly added node of a kind, skipping vendors blocked for this server. */
+export function defaultModel(kind: MediaKind, blocked: readonly string[] = []): ModelSpec {
+  const usable = modelsOfKind(kind).filter((m) => !isBlocked(m.id, blocked));
+  return usable.find((m) => m.group === kind) ?? usable[0] ?? modelsOfKind(kind)[0];
 }
 
 export function defaultParams(spec: ModelSpec): Record<string, ParamValue> {

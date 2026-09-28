@@ -67,10 +67,10 @@ export const TEMPLATES: Template[] = [
     build: () => ({
       nodes: [
         prompt("idea", { x: 0, y: 0 }, "Уютная кофейня в дождливый вечер, за окном огни города"),
-        model("writer", { x: 400, y: 0 }, "google/gemini-3.8-flash", {
+        model("writer", { x: 400, y: 0 }, "deepseek/deepseek-v4.1-flash", {
           params: { system: "Преврати идею в подробный промт для кинематографичного кадра: объект, окружение, свет, объектив, стиль. Ответь только промтом." },
         }),
-        model("frame", { x: 820, y: 0 }, "google/gemini-3.1-flash-image"),
+        model("frame", { x: 820, y: 0 }, "openai/gpt-image-2"),
         model("clip", { x: 1240, y: 0 }, "bytedance/seedance-2.0-fast", {
           prompt: "Камера плавно движется вперёд, пар поднимается над чашкой, капли стекают по стеклу",
         }),
@@ -85,7 +85,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "character-refs",
     title: "Персонаж по референсам",
-    description: "Два-три фото персонажа, и Seedance снимает с ним новую сцену, сохраняя внешность.",
+    description: "Два-три изображения персонажа, и Seedance снимает с ним новую сцену, сохраняя внешность. Подходит для иллюстраций и 3D-героев.",
     audience: "Клипмейкерам",
     build: () => ({
       nodes: [
@@ -93,6 +93,7 @@ export const TEMPLATES: Template[] = [
         file("face2", { x: 0, y: 260 }, "image"),
         prompt("scene", { x: 0, y: 520 }, "Персонаж с референсов идёт по ночному рынку, камера следует сзади, неоновый свет, лёгкий дождь"),
         model("clip", { x: 420, y: 120 }, "bytedance/seedance-2.0"),
+        note("tip", { x: 420, y: -150 }, "Seedance не принимает фото реальных людей (фильтр приватности). Бери иллюстрации, 3D-персонажей или стилизованные кадры."),
       ],
       edges: [
         wire("face1", "image", "clip", "references"),
@@ -133,7 +134,7 @@ export const TEMPLATES: Template[] = [
     build: () => ({
       nodes: [
         file("src", { x: 0, y: 0 }, "image"),
-        model("describe", { x: 400, y: 0 }, "google/gemini-3.8-flash", {
+        model("describe", { x: 400, y: 0 }, "deepseek/deepseek-v4.1-flash", {
           prompt: "Опиши картинку как промт для генерации: объекты, композиция, свет, цвета. Добавь в конце: в стиле плоской векторной иллюстрации.",
         }),
         model("draw", { x: 820, y: 0 }, "recraft/recraft-v4.1"),

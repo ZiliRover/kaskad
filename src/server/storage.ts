@@ -2,7 +2,7 @@
  * File storage. Local disk for now; the interface is what an S3-compatible
  * implementation (Yandex Object Storage / Selectel) will provide later.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -71,4 +71,44 @@ export async function asDataUrl(key: string): Promise<string> {
 
 export function storagePath(key: string): string {
   return abs(key);
+}
+
+// ---------------------------------------------------------------- links for providers
+
+
+/**
+ * Providers fetch video and audio inputs themselves and accept only public https links,
+ * so the server hands out short-lived signed URLs to its own files. Needs PUBLIC_BASE_URL
+ * (the https address the internet reaches this server at).
+ */
+function signingSecret(): string {
+  return process.env.FILE_URL_SECRET?.trim()
+    // same value in the web and worker processes without extra setup
+    || createHash("sha256").update(`kaskad-files:${process.env.DATABASE_URL ?? ""}`).digest("hex");
+}
+
+function signature(key: string, exp: number): string {
+  return createHmac("sha256", signingSecret()).update(`${key}:${exp}`).digest("base64url");
+}
+
+export function publicBaseUrl(): string | null {
+  const base = process.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  return base && base.startsWith("https://") ? base : null;
+}
+
+export function signedFileUrl(key: string, ttlSec = 3 * 60 * 60): string | null {
+  const base = publicBaseUrl();
+  if (!base) return null;
+  const exp = Math.floor(Date.now() / 1000) + ttlSec;
+  return `${base}${fileUrl(key)}?exp=${exp}&sig=${signature(key, exp)}`;
+}
+
+/** true = valid, false = present but invalid/expired */
+export function checkSignature(key: string, exp: string | null, sig: string | null): boolean {
+  if (!exp || !sig) return false;
+  const e = Number(exp);
+  if (!Number.isFinite(e) || e < Date.now() / 1000) return false;
+  const want = Buffer.from(signature(key, e));
+  const got = Buffer.from(sig);
+  return want.length === got.length && timingSafeEqual(want, got);
 }

@@ -23,15 +23,17 @@ interface Props {
   initialState: GraphState;
   providerMode: "live" | "mock";
   fx: Fx;
+  blockedVendors: string[];
 }
 
-export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx }: Props) {
+export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx, blockedVendors }: Props) {
   // the store is a browser singleton: fill it on mount, never during server render
   const [ready, setReady] = useState(false);
   useEffect(() => {
     useStudio.getState().init(graphId, initialDoc, initialState, fx);
+    useStudio.setState({ blockedVendors });
     setReady(true);
-  }, [graphId, initialDoc, initialState, fx]);
+  }, [graphId, initialDoc, initialState, fx, blockedVendors]);
   useEffect(() => useTheme.getState().init(), []);
 
   return (

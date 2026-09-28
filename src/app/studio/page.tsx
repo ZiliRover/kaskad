@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { Studio } from "@/components/studio/Studio";
 import { getFx } from "@/server/fx";
 import { DEFAULT_GRAPH_ID, graphState, loadGraph } from "@/server/graphs";
-import { providerMode } from "@/server/providers";
+import { blockedVendors, providerMode } from "@/server/providers";
 
 export default async function StudioPage() {
   await connection(); // per-request: reads the database
@@ -16,6 +16,7 @@ export default async function StudioPage() {
       initialState={await graphState(graph.id)}
       providerMode={providerMode()}
       fx={fx}
+      blockedVendors={blockedVendors()}
     />
   );
 }

@@ -5,7 +5,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRub } from "@/lib/money";
 import { estimate } from "@/lib/models/pricing";
-import { MODELS, defaultParams } from "@/lib/models/registry";
+import { MODELS, defaultParams, isBlocked } from "@/lib/models/registry";
 import type { ModelCaps, ModelGroup, ModelSpec } from "@/lib/models/types";
 import { PALETTE_MIME, setDragPayload, type PalettePayload } from "./Canvas";
 import { CapIcons, GROUP_ICONS, NodeIcon, type NodeKey } from "./icons";
@@ -89,6 +89,7 @@ function SimpleItem({ node, title, desc, payload, onAdd }: {
 export function Sidebar() {
   const addNode = useStudio((s) => s.addNode);
   const fx = useStudio((s) => s.fx);
+  const blocked = useStudio((s) => s.blockedVendors);
   const { screenToFlowPosition } = useReactFlow();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<(keyof ModelCaps)[]>([]);
@@ -191,16 +192,19 @@ export function Sidebar() {
               {shown.map((m) => {
                 const usd = prices.get(m.id);
                 const payload: PalettePayload = { type: "model", kind: m.kind, modelId: m.id };
+                const off = isBlocked(m.id, blocked);
                 return (
                   <button
-                    key={m.id} type="button" className="palette-item model-item" draggable
+                    key={m.id} type="button" className={`palette-item model-item${off ? " is-blocked" : ""}`} draggable
                     onDragStart={(e) => startDrag(e, payload)} onDragEnd={endDrag} onClick={() => addAtCenter(payload)}
-                    title={`${m.blurb || `${m.vendor} ${m.name}`}\nПеретащи на холст или на ноду, чтобы сменить в ней модель`}
+                    title={off
+                      ? `${m.vendor} не обслуживает регион сервера: модель сейчас не запустится`
+                      : `${m.blurb || `${m.vendor} ${m.name}`}\nПеретащи на холст или на ноду, чтобы сменить в ней модель`}
                   >
                     <span className="pi-text">
                       <span className="pi-title">
                         {m.name}
-                        {usd !== null && usd !== undefined && (
+                        {off ? <span className="pi-price">недоступна</span> : usd !== null && usd !== undefined && (
                           <span className="pi-price">{m.pricing.type === "free" ? "бесплатно" : `от ${formatRub(usd, fx)}`}</span>
                         )}
                       </span>

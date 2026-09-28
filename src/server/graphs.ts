@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { defaultParams, getModel } from "@/lib/models/registry";
+import { defaultModel, defaultParams } from "@/lib/models/registry";
+import { blockedVendors } from "./providers";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { GraphState, JobStatus, NodeState, OutputVersion } from "@/lib/jobs";
 import { db, graphs, jobs, outputs } from "./db";
@@ -9,13 +10,15 @@ export const DEFAULT_GRAPH_ID = "default";
 
 /** Starter canvas: a real chain (prompt → image → video) the user can run immediately. */
 function starterDoc(): GraphDoc {
-  const img = getModel("google/gemini-3.1-flash-image")!;
-  const vid = getModel("bytedance/seedance-2.0-fast")!;
+  const blocked = blockedVendors();
+  const img = defaultModel("image", blocked);
+  const vid = defaultModel("video", blocked);
   return {
     nodes: [
       {
         id: "p1", type: "prompt", position: { x: 0, y: 40 },
-        data: { text: "Кинематографичный кадр: ночной город под дождём, неоновые вывески отражаются в мокром асфальте, одинокий прохожий с красным зонтом" },
+        // no people in the starter: some video models refuse frames that look like a real person
+        data: { text: "Кинематографичный кадр: пустая ночная улица под дождём, неоновые вывески отражаются в мокром асфальте, красный зонт лежит у фонаря" },
       },
       {
         id: "m1", type: "model", position: { x: 400, y: 0 },
@@ -25,7 +28,7 @@ function starterDoc(): GraphDoc {
         id: "m2", type: "model", position: { x: 820, y: 0 },
         data: {
           kind: "video", modelId: vid.id,
-          prompt: "Камера медленно наезжает на прохожего, капли дождя падают, неон мерцает",
+          prompt: "Камера медленно движется вперёд по улице, капли дождя падают, неон мерцает",
           params: defaultParams(vid),
         },
       },

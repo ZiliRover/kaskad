@@ -3,6 +3,7 @@
  * closed tabs and web-server deploys never interrupt a paid generation.
  */
 import { providerMode } from "../providers";
+import { apiKeySource } from "../providers/openrouter";
 import { executeJob } from "./execute";
 import { claimJob, recoverStale } from "./queue";
 
@@ -44,7 +45,9 @@ async function tick() {
 }
 
 async function main() {
-  console.log(`[worker] started · provider=${providerMode()} · concurrency=${CONCURRENCY}`);
+  const src = apiKeySource();
+  const keyInfo = src ? `key …${src.key.slice(-4)} from ${src.from}` : "no key";
+  console.log(`[worker] started · provider=${providerMode()} · ${keyInfo} · concurrency=${CONCURRENCY}`);
   const recovered = await recoverStale().catch(() => 0);
   if (recovered) console.log(`[worker] recovered ${recovered} interrupted job(s)`);
   setInterval(tick, IDLE_POLL_MS);

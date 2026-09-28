@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
-import { isValidKey, mimeForKey, statStored, storagePath } from "@/server/storage";
+import { checkSignature, isValidKey, mimeForKey, statStored, storagePath } from "@/server/storage";
 
 // Files are content-addressed by random key and never change: cache forever.
 const CACHE = "public, max-age=31536000, immutable";
@@ -8,6 +8,12 @@ const CACHE = "public, max-age=31536000, immutable";
 export async function GET(req: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const key = (await params).key.join("/");
   if (!isValidKey(key)) return new Response("Not found", { status: 404 });
+  // provider links carry a signature; a wrong or expired one is refused.
+  // TODO(accounts): unsigned access must also check the file belongs to the signed-in user.
+  const q = new URL(req.url).searchParams;
+  if ((q.has("sig") || q.has("exp")) && !checkSignature(key, q.get("exp"), q.get("sig"))) {
+    return new Response("Link expired", { status: 403 });
+  }
   const st = await statStored(key);
   if (!st) return new Response("Not found", { status: 404 });
 

@@ -68,14 +68,14 @@ Open <http://localhost:3000>. `npm run dev` starts three processes:
 Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 
 > [!NOTE]
-> The studio starts in **test mode** (`PROVIDER_MODE=mock`): generations are free placeholders and a badge in the header says so. Put your key in `OPENROUTER_API_KEY` and set `PROVIDER_MODE=live` for real generations, which are billed to your OpenRouter balance.
+> The studio starts in **test mode** (`PROVIDER_MODE=mock`): generations are free placeholders and a badge in the header says so. Put your key in `KASKAD_OPENROUTER_KEY` and set `PROVIDER_MODE=live` for real generations, which are billed to your OpenRouter balance.
 
 <details>
 <summary><b>Environment variables</b></summary>
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | | server-side key, never sent to the browser |
+| `KASKAD_OPENROUTER_KEY` | | server-side key, never sent to the browser. Project-specific name so a machine-wide `OPENROUTER_API_KEY` from other tools can't override it |
 | `PROVIDER_MODE` | `mock` | `live` for real OpenRouter calls |
 | `DATABASE_URL` | local dev Postgres | any Postgres 15+ in production |
 | `STORAGE_DIR` | `./storage` | uploads and results (S3-compatible storage is planned) |
@@ -83,6 +83,9 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `WORKER_CONCURRENCY` | `4` | parallel jobs per worker |
 | `USD_RUB_FALLBACK` | `85` | rate used if the Central Bank feed is unreachable |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | `ffmpeg` / `ffprobe` | custom ffmpeg location |
+| `BLOCKED_VENDORS` | | vendors that refuse the server's region, e.g. `google` from Russia; their models are marked unavailable |
+| `PUBLIC_BASE_URL` | | public https address of the server; providers download video/audio inputs by signed link |
+| `FILE_URL_SECRET` | derived | secret for those signed links |
 
 </details>
 
@@ -140,10 +143,12 @@ prototype/      the original desktop app, kept for reference
 
 ## Status
 
-This is the core of the product, verified end to end in test mode. Before it faces users:
+This is the core of the product. A live run on real models (GPT Image 2 → Seedance 2.0 Fast → last frame → Seedance 2.0 Mini → join) produced an 8-second video for $0.32, within 4% of the pre-run estimate. What the live run taught us, and what is still open:
 
+- **Google models are blocked from Russia** ("Blocked by Google AI Studio"): Nano Banana, Veo and Gemini need a generation server abroad. Set `BLOCKED_VENDORS=google` meanwhile; OpenAI, Anthropic, ByteDance, Alibaba and others work.
+- **Seedance refuses frames that look like a real person** (provider privacy filter). The studio explains this on the node and suggests stylized frames or other models.
+- **Video and audio inputs need a public https server address.** Providers accept them only as links, not inline files; without `PUBLIC_BASE_URL` those runs stop before anything is billed.
 - **No accounts or payments yet.** There is one shared graph and no login. Do not expose it to the internet with a real key.
-- **Video, audio and source-video inputs are unverified against the live API.** Their request format follows OpenRouter's reference, but providers may reject large files sent inline.
 - **Reference limits for video models are estimates.** OpenRouter doesn't publish them; providers report an error on the node if a limit is exceeded.
 - **Graph saves are last-write-wins.** Two open tabs of the same graph can overwrite each other.
 

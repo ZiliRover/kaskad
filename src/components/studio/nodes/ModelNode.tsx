@@ -6,7 +6,7 @@ import { memo, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { estimate } from "@/lib/models/pricing";
 import { formatRub, priceTitle } from "@/lib/money";
-import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
+import { getModel, isBlocked, TOOL_PREFIX } from "@/lib/models/registry";
 import type { MediaKind, ParamValue } from "@/lib/models/types";
 import { CapIcons } from "../icons";
 import { isActive, useStudio, type ModelNodeT } from "../store";
@@ -39,6 +39,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
     updateData: s.updateData, run: s.run, cancel: s.cancel,
   })));
   const isTool = data.modelId.startsWith(TOOL_PREFIX);
+  const blocked = useStudio((s) => isBlocked(data.modelId, s.blockedVendors));
   const hasPromptPort = !!spec?.inputs.some((p) => p.key === "prompt");
   const fx = useStudio((s) => s.fx);
   const node = useStudio((s) => s.state[id]);
@@ -92,7 +93,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
           Стоп
         </button>
       ) : (
-        <button type="button" className="btn btn-primary btn-sm nodrag" disabled={!spec} onClick={() => run([id], "missing")}>
+        <button type="button" className="btn btn-primary btn-sm nodrag" disabled={!spec || blocked} onClick={() => run([id], "missing")}>
           Запустить
         </button>
       )}
@@ -120,6 +121,11 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       wide
       footer={footer}
     >
+      {blocked && (
+        <div className="node-warning">
+          {spec?.vendor} не обслуживает регион сервера. Перетащи на эту ноду модель другого производителя.
+        </div>
+      )}
       {spec && (spec.blurb || spec.caps) && (
         <div className="model-sub">
           {spec.blurb && <span className="model-blurb">{spec.blurb}</span>}

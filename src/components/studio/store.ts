@@ -42,6 +42,8 @@ interface StudioStore {
   trash: { nodes: StudioNode[]; edges: Edge[] } | null;
   galleryOpen: boolean;
   templatesOpen: boolean;
+  /** vendors this server can't reach (see BLOCKED_VENDORS) */
+  blockedVendors: string[];
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -253,6 +255,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   trash: null,
   galleryOpen: false,
   templatesOpen: false,
+  blockedVendors: [],
 
   setPanel(p) {
     set(p);
@@ -329,7 +332,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
     else if (type === "note") node = { id, type, position, data: { text: "", color: "yellow" } };
     else if (type === "group") node = { id, type, position, data: { title: "Группа", width: 720, height: 420 } };
     else {
-      const spec = (opts.modelId && getModel(opts.modelId)) || defaultModel(opts.kind ?? "image");
+      const spec = (opts.modelId && getModel(opts.modelId)) || defaultModel(opts.kind ?? "image", get().blockedVendors);
       node = { id, type: "model", position, data: { kind: spec.kind, modelId: spec.id, prompt: "", params: defaultParams(spec) } };
     }
     set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), { ...present(node), selected: true }] }));

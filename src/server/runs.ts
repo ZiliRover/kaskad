@@ -1,5 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { planRun } from "@/lib/graph/plan";
+import { getModel, isBlocked } from "@/lib/models/registry";
+import { blockedVendors } from "./providers";
 import type { GraphDoc } from "@/lib/graph/types";
 import { ACTIVE_STATUSES } from "@/lib/jobs";
 import { db, jobs, outputs, runs } from "./db";
@@ -38,6 +40,14 @@ export async function createRun(
       isActive: (id) => activeByNode.has(id),
     });
     if (!plan.ok) return plan;
+    const blocked = blockedVendors();
+    const refused = plan.jobs.find((j) => isBlocked(j.modelId, blocked));
+    if (refused) {
+      return {
+        ok: false as const, nodeId: refused.nodeId,
+        error: `${getModel(refused.modelId)?.name ?? refused.modelId}: производитель не обслуживает регион сервера. Выбери другую модель.`,
+      };
+    }
     if (!plan.jobs.length) return { ok: false as const, nodeId: targets[0] ?? "", error: "Нода уже генерируется" };
 
     const [run] = await tx.insert(runs)

@@ -3,7 +3,7 @@ import type { InputRef } from "@/lib/jobs";
 import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
 import { db, outputs, type JobRow } from "../db";
 import { getProvider, ProviderError } from "../providers";
-import { asDataUrl, newKey, putFile, storagePath } from "../storage";
+import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
 import { concatVideos, extractFrame } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
 
@@ -42,18 +42,34 @@ async function resolveText(job: JobRow, refs: InputRef[] = []): Promise<string> 
   return parts.join("\n\n").trim();
 }
 
-/** Files (images, video, audio) as data URLs, from uploads or upstream results. */
-async function resolveMedia(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
-  const urls: string[] = [];
+/** Storage keys of file inputs, from uploads or upstream results. */
+async function resolveKeys(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
+  const keys: string[] = [];
   for (const r of refs) {
-    if (r.type === "file") urls.push(await asDataUrl(r.key));
+    if (r.type === "file") keys.push(r.key);
     else if (r.type === "node") {
       const o = await nodeOutput(job.graphId, r);
       if (!o.fileKey) throw new InputError("Входная нода вернула не файл");
-      urls.push(await asDataUrl(o.fileKey));
+      keys.push(o.fileKey);
     }
   }
-  return urls;
+  return keys;
+}
+
+/** Images travel inline as data URLs (providers accept that). */
+async function resolveMedia(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
+  return Promise.all((await resolveKeys(job, refs)).map(asDataUrl));
+}
+
+/** Video and audio must be public https links the provider downloads itself. */
+async function resolveLinks(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
+  const keys = await resolveKeys(job, refs);
+  return keys.map((k) => {
+    const url = signedFileUrl(k);
+    // fail before submitting: nothing is billed
+    if (!url) throw new InputError("Видео и аудио на вход провайдер скачивает по ссылке, а у сервера нет публичного https-адреса. Задай PUBLIC_BASE_URL или отключи эти входы.");
+    return url;
+  });
 }
 
 /** Local file paths of media inputs, for tools that work on disk. */
@@ -121,15 +137,15 @@ async function run(job: JobRow) {
   if (!externalId) {
     const [first] = await resolveMedia(job, ports.first_frame);
     const [last] = await resolveMedia(job, ports.last_frame);
-    const [source] = await resolveMedia(job, ports.source);
+    const [source] = await resolveLinks(job, ports.source);
     ({ externalId } = await provider.submitVideo({
       model: job.modelId, prompt, params,
       firstFrame: first ?? null,
       lastFrame: last ?? null,
       sourceVideo: source ?? null,
       refImages: await resolveMedia(job, ports.references),
-      refVideos: await resolveMedia(job, ports.ref_videos),
-      refAudio: await resolveMedia(job, ports.ref_audio),
+      refVideos: await resolveLinks(job, ports.ref_videos),
+      refAudio: await resolveLinks(job, ports.ref_audio),
     }));
     await heartbeat(job.id, externalId);
   }

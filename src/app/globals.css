@@ -782,3 +782,12 @@ button.side-title:hover { color: var(--text-2); }
 .tpl-add { align-self: flex-start; margin-top: 4px; }
 
 .react-flow__minimap-mask { fill: var(--minimap-mask); }
+
+/* models whose vendor refuses the server's region */
+.model-item.is-blocked { opacity: .5; }
+.node-warning {
+  font-size: 12px; line-height: 1.45; color: var(--warn);
+  padding: 8px 10px; border-radius: var(--r-ctl);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+}

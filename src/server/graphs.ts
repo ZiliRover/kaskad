@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { defaultModel, defaultParams } from "@/lib/models/registry";
 import { blockedVendors } from "./providers";
@@ -5,8 +6,6 @@ import type { GraphDoc } from "@/lib/graph/types";
 import type { GraphState, JobStatus, NodeState, OutputVersion } from "@/lib/jobs";
 import { db, graphs, jobs, outputs } from "./db";
 import { fileUrl } from "./storage";
-
-export const DEFAULT_GRAPH_ID = "default";
 
 /** Starter canvas: a real chain (prompt → image → video) the user can run immediately. */
 function starterDoc(): GraphDoc {
@@ -25,36 +24,42 @@ function starterDoc(): GraphDoc {
         data: { kind: "image", modelId: img.id, prompt: "", params: defaultParams(img) },
       },
       {
-        id: "m2", type: "model", position: { x: 820, y: 0 },
-        data: {
-          kind: "video", modelId: vid.id,
-          prompt: "Камера медленно движется вперёд по улице, капли дождя падают, неон мерцает",
-          params: defaultParams(vid),
-        },
+        id: "p2", type: "prompt", position: { x: 820, y: 260 },
+        data: { text: "Камера медленно движется вперёд по улице, капли дождя падают, неон мерцает" },
+      },
+      {
+        id: "m2", type: "model", position: { x: 1240, y: 0 },
+        data: { kind: "video", modelId: vid.id, prompt: "", params: defaultParams(vid) },
       },
     ],
     edges: [
       { id: "e1", source: "p1", sourceHandle: "text", target: "m1", targetHandle: "prompt" },
       { id: "e2", source: "m1", sourceHandle: "image", target: "m2", targetHandle: "first_frame" },
+      { id: "e3", source: "p2", sourceHandle: "text", target: "m2", targetHandle: "prompt" },
     ],
-    viewport: { x: 80, y: 120, zoom: 0.9 },
+    viewport: { x: 40, y: 140, zoom: 0.66 },
   };
 }
 
-export async function loadGraph(id: string) {
-  const [row] = await db.select().from(graphs).where(eq(graphs.id, id));
+/** The canvas a user opens: their most recently edited one, created on first visit. */
+export async function userGraph(userId: string) {
+  const [row] = await db.select().from(graphs).where(eq(graphs.ownerId, userId)).orderBy(desc(graphs.updatedAt)).limit(1);
   if (row) return row;
-  if (id !== DEFAULT_GRAPH_ID) return null;
   const [created] = await db.insert(graphs)
-    .values({ id, name: "Без названия", doc: starterDoc() })
-    .onConflictDoNothing()
+    .values({ id: randomUUID(), ownerId: userId, name: "Без названия", doc: starterDoc() })
     .returning();
-  return created ?? (await db.select().from(graphs).where(eq(graphs.id, id)))[0];
+  return created;
 }
 
-export async function graphExists(id: string): Promise<boolean> {
-  const [row] = await db.select({ id: graphs.id }).from(graphs).where(eq(graphs.id, id));
-  return !!row;
+/** A graph, only if this user owns it. Someone else's graph looks exactly like a missing one. */
+export async function ownedGraph(id: string, userId: string) {
+  const [row] = await db.select().from(graphs).where(and(eq(graphs.id, id), eq(graphs.ownerId, userId)));
+  return row ?? null;
+}
+
+export async function graphOwner(id: string): Promise<string | null> {
+  const [row] = await db.select({ ownerId: graphs.ownerId }).from(graphs).where(eq(graphs.id, id));
+  return row?.ownerId ?? null;
 }
 
 /** Results of one node (its versions), or of the whole graph (gallery) when nodeId is null. */
@@ -91,6 +96,9 @@ interface StateRow extends Record<string, unknown> {
   status: JobStatus | null;
   error: string | null;
   cost_usd: string | null;
+  charged_kop: string | null;
+  model_id: string | null;
+  params: Record<string, unknown> | null;
   job_created: Date | null;
   started_at: Date | null;
   output_id: string | null;
@@ -109,7 +117,8 @@ const iso = (d: Date | string | null) => (d ? new Date(d).toISOString() : null);
 export async function graphState(graphId: string): Promise<GraphState> {
   const rows = await db.execute<StateRow>(sql`
     with lj as (
-      select distinct on (node_id) node_id, id, status, error, cost_usd, created_at, started_at
+      select distinct on (node_id) node_id, id, status, error, cost_usd, created_at, started_at,
+             model_id, input->'params' as params
       from jobs where graph_id = ${graphId}
       order by node_id, created_at desc
     ), lo as (
@@ -129,6 +138,8 @@ export async function graphState(graphId: string): Promise<GraphState> {
     )
     select coalesce(lj.node_id, lo.node_id) as node_id,
            lj.id as job_id, lj.status, lj.error, lj.cost_usd, lj.created_at as job_created, lj.started_at,
+           lj.model_id, lj.params,
+           (select -l.amount_kop from ledger l where l.job_id = lj.id and l.kind = 'charge') as charged_kop,
            lo.id as output_id, lo.kind, lo.file_key, lo.mime, lo.text, lo.created_at as output_created,
            coalesce(oc.n, 0) as output_count, b.batch
     from lj full outer join lo on lo.node_id = lj.node_id
@@ -144,6 +155,9 @@ export async function graphState(graphId: string): Promise<GraphState> {
         status: r.status!,
         error: r.error,
         costUsd: r.cost_usd === null ? null : Number(r.cost_usd),
+        chargedKop: r.charged_kop === null ? null : Number(r.charged_kop),
+        modelId: r.model_id ?? "",
+        params: r.params ?? {},
         createdAt: iso(r.job_created)!,
         startedAt: iso(r.started_at),
       } : null,

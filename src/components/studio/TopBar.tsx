@@ -1,13 +1,81 @@
 "use client";
 
-import { ImagesSquareIcon, LayoutIcon, MonitorIcon, MoonIcon, SunIcon } from "@phosphor-icons/react";
+import {
+  ImagesSquareIcon, LayoutIcon, MonitorIcon, MoonIcon, SignOutIcon, SunIcon, UserIcon, WalletIcon,
+} from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
 import { BRAND } from "@/config/brand";
+import { formatKop, formatUsd } from "@/lib/money";
 import { isActive, useStudio } from "./store";
 import { useTheme, type ThemeMode } from "./theme";
 
 const THEME_NEXT: Record<ThemeMode, ThemeMode> = { system: "light", light: "dark", dark: "system" };
 const THEME_LABEL: Record<ThemeMode, string> = { system: "Тема как в системе", light: "Светлая тема", dark: "Тёмная тема" };
 const THEME_ICON = { system: MonitorIcon, light: SunIcon, dark: MoonIcon };
+
+function AccountMenu() {
+  const account = useStudio((s) => s.account);
+  const fx = useStudio((s) => s.fx);
+  const setPanel = useStudio((s) => s.setPanel);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("pointerdown", away); window.removeEventListener("keydown", esc); };
+  }, [open]);
+
+  if (!account) return null;
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.assign("/login");
+  };
+
+  return (
+    <>
+      {account.admin && account.providerUsd !== null && (
+        <span
+          className="provider-balance"
+          title={`${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ без наценки. Из него оплачиваются все генерации. Видно только администратору.`}
+        >
+          <span className="provider-balance-label">OpenRouter</span>
+          {formatKop(Math.round(account.providerUsd * fx.usdRub) * 100)}
+        </span>
+      )}
+      <button
+        type="button"
+        className={`btn btn-ghost balance-chip${account.availableKop <= 0 ? " is-empty" : ""}`}
+        title={account.reservedKop > 0 ? `Ещё ${formatKop(account.reservedKop)} в резерве у идущих генераций` : "Баланс и пополнение"}
+        onClick={() => setPanel({ billingOpen: true })}
+      >
+        <WalletIcon size={15} aria-hidden />{formatKop(Math.max(0, account.availableKop))}
+      </button>
+      <div className="enhance" ref={ref}>
+        <button
+          type="button" className="icon-btn tb-icon" aria-label="Аккаунт" aria-haspopup="menu" aria-expanded={open}
+          title={account.email} onClick={() => setOpen((v) => !v)}
+        >
+          <UserIcon size={16} aria-hidden />
+        </button>
+        {open && (
+          <div className="menu account-menu" role="menu">
+            <span className="account-email">{account.email}</span>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setPanel({ billingOpen: true }); }}>
+              <WalletIcon size={14} aria-hidden />Баланс и история
+            </button>
+            <button type="button" role="menuitem" onClick={() => void logout()}>
+              <SignOutIcon size={14} aria-hidden />Выйти
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 export function TopBar({ graphName, providerMode }: { graphName: string; providerMode: "live" | "mock" }) {
   const run = useStudio((s) => s.run);
@@ -29,20 +97,22 @@ export function TopBar({ graphName, providerMode }: { graphName: string; provide
       </div>
       <div className="tb-right">
         {providerMode === "mock" && (
-          <span className="badge badge-warn" title="Генерации не настоящие и бесплатные. Для реальных: PROVIDER_MODE=live в .env">
+          <span className="badge badge-warn" title="Провайдер не вызывается: вместо генераций заглушки, баланс списывается по оценке. Для реальных: PROVIDER_MODE=live в .env">
             Тестовый режим
           </span>
         )}
-        <button type="button" className="btn btn-ghost" onClick={() => setPanel({ templatesOpen: true })}>
-          <LayoutIcon size={15} aria-hidden />Шаблоны
+        <button type="button" className="btn btn-ghost" aria-label="Шаблоны" title="Шаблоны" onClick={() => setPanel({ templatesOpen: true })}>
+          <LayoutIcon size={15} aria-hidden /><span className="tb-label">Шаблоны</span>
         </button>
         <button
           type="button"
           className={`btn btn-ghost${galleryOpen ? " is-on" : ""}`}
           aria-pressed={galleryOpen}
+          aria-label="Результаты"
+          title="Все результаты этого холста"
           onClick={() => setPanel({ galleryOpen: !galleryOpen })}
         >
-          <ImagesSquareIcon size={15} aria-hidden />Результаты
+          <ImagesSquareIcon size={15} aria-hidden /><span className="tb-label">Результаты</span>
         </button>
         <button
           type="button"
@@ -59,6 +129,8 @@ export function TopBar({ graphName, providerMode }: { graphName: string; provide
           disabled={!modelIds || anyBusy}
           onClick={() => run(modelIds.split(","), "all")}
         >Запустить всё</button>
+        <span className="tb-divider" aria-hidden />
+        <AccountMenu />
       </div>
     </header>
   );

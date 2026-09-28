@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
 import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
 import { db, outputs, type JobRow } from "../db";
-import { getProvider, ProviderError } from "../providers";
+import { getProvider, providerMode, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
 import { concatVideos, extractFrame } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
@@ -14,6 +14,16 @@ const HEARTBEAT_MS = 15_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 class InputError extends ProviderError {}
+
+/**
+ * What the job is billed at: the provider's reported cost, or our estimate when it reports
+ * none. Test mode bills the estimate too, so balances move exactly as they would live.
+ */
+function billable(job: JobRow, reported: number | null): number | null {
+  const est = job.estimateUsd === null ? null : Number(job.estimateUsd);
+  if (providerMode() === "mock") return est;
+  return reported ?? est;
+}
 
 /** The result a node passes on: the one the user picked, otherwise the latest. */
 async function nodeOutput(graphId: string, ref: Extract<InputRef, { type: "node" }>) {
@@ -120,7 +130,7 @@ async function run(job: JobRow) {
     const r = await provider.image({ model: job.modelId, prompt, params, references: await resolveMedia(job, ports.references) });
     const files = [];
     for (const img of r.images) files.push({ fileKey: await store(job, img.bytes, img.mime), mime: img.mime });
-    await completeJob(job, files, r.costUsd);
+    await completeJob(job, files, billable(job, r.costUsd));
     return;
   }
 
@@ -128,7 +138,7 @@ async function run(job: JobRow) {
     const r = await provider.text({
       model: job.modelId, prompt, system: String(params.system ?? ""), images: await resolveMedia(job, ports.images),
     });
-    await completeJob(job, [{ text: r.text }], r.costUsd);
+    await completeJob(job, [{ text: r.text }], billable(job, r.costUsd));
     return;
   }
 
@@ -164,7 +174,7 @@ async function run(job: JobRow) {
     if (poll.state === "done") {
       const media = await provider.downloadVideo(externalId);
       const key = await store(job, media.bytes, media.mime);
-      await completeJob(job, [{ fileKey: key, mime: media.mime }], poll.costUsd);
+      await completeJob(job, [{ fileKey: key, mime: media.mime }], billable(job, poll.costUsd));
       return;
     }
   }

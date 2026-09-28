@@ -1,10 +1,13 @@
 import { sql } from "drizzle-orm";
 import { getModel } from "@/lib/models/registry";
+import { settleJob } from "../billing";
 import { db, type JobRow } from "../db";
+import { getFx } from "../fx";
 
 const HEARTBEAT_STALE_SEC = 45;
 
 type RawJob = Record<string, unknown>;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function toJob(r: RawJob): JobRow {
   return {
@@ -12,6 +15,8 @@ function toJob(r: RawJob): JobRow {
     runId: r.run_id as string,
     graphId: r.graph_id as string,
     nodeId: r.node_id as string,
+    userId: (r.user_id as string | null) ?? null,
+    holdKop: Number(r.hold_kop ?? 0),
     kind: r.kind as JobRow["kind"],
     modelId: r.model_id as string,
     input: r.input as JobRow["input"],
@@ -61,6 +66,7 @@ export async function completeJob(
   job: JobRow, results: { fileKey?: string; mime?: string; text?: string }[], costUsd: number | null,
 ) {
   const cost = costUsd === null ? null : String(costUsd);
+  const fx = costUsd ? await getFx() : null;
   await db.transaction(async (tx) => {
     // only a still-running job may succeed: a result arriving after cancel is discarded
     const done = await tx.execute(sql`
@@ -82,16 +88,23 @@ export async function completeJob(
       // canceled mid-flight, but the provider still billed it: keep spend accounting honest
       await tx.execute(sql`update jobs set cost_usd = ${cost} where id = ${job.id} and status = 'canceled'`);
     }
+    // the hold goes back and the real cost is charged, in the same transaction as the result
+    await settleJob(tx, job.id, costUsd, fx);
   });
 }
 
+/** A failed generation is free for the user: the hold is released, nothing is charged. */
 export async function failJob(job: JobRow, error: string) {
-  const r = await db.execute(sql`
-    update jobs set status = 'failed', finished_at = now(), error = ${error}
-    where id = ${job.id} and status = 'running'
-    returning id
-  `);
-  if (r.length) await skipDependents(job, "failed");
+  await db.transaction(async (tx) => {
+    const r = await tx.execute(sql`
+      update jobs set status = 'failed', finished_at = now(), error = ${error}
+      where id = ${job.id} and status = 'running'
+      returning id
+    `);
+    if (!r.length) return;
+    await settleJob(tx, job.id, null, null);
+    await skipDependents(tx, job, "failed");
+  });
 }
 
 export async function isCanceled(jobId: string): Promise<boolean> {
@@ -103,27 +116,37 @@ export async function isCanceled(jobId: string): Promise<boolean> {
  * Stop a queued or running job. Queued jobs never reach the provider (free);
  * a running one stops being waited for, though the provider may still bill it.
  */
-export async function cancelJob(jobId: string): Promise<"canceled" | "not-active"> {
-  const rows = await db.execute<RawJob>(sql`
-    update jobs set status = 'canceled', finished_at = now(), error = 'Отменено'
-    where id = ${jobId} and status in ('queued', 'running')
-    returning id, model_id
-  `);
-  if (!rows.length) return "not-active";
-  await skipDependents({ id: jobId, modelId: rows[0].model_id as string }, "canceled");
-  return "canceled";
+export async function cancelJob(jobId: string, userId: string): Promise<"canceled" | "not-active"> {
+  return db.transaction(async (tx) => {
+    const rows = await tx.execute<RawJob>(sql`
+      update jobs j set status = 'canceled', finished_at = now(), error = 'Отменено'
+      from (select id, status as prev, external_id, estimate_usd from jobs where id = ${jobId} for update) old
+      where j.id = old.id and j.user_id = ${userId} and j.status in ('queued', 'running')
+      returning j.id, j.model_id, old.prev, old.external_id, old.estimate_usd
+    `);
+    if (!rows.length) return "not-active" as const;
+    const r = rows[0];
+    // a generation the provider already accepted is billed to us anyway: it costs its estimate
+    const billed = r.prev === "running" && r.external_id && r.estimate_usd !== null ? Number(r.estimate_usd) : null;
+    await settleJob(tx, jobId, billed, billed ? await getFx() : null);
+    await skipDependents(tx, { id: jobId, modelId: rows[0].model_id as string }, "canceled");
+    return "canceled" as const;
+  });
 }
 
 /** Queued jobs waiting on a dead job can never run: tell the user why, all the way down the chain. */
-async function skipDependents(dead: Pick<JobRow, "id" | "modelId">, why: "failed" | "canceled") {
+async function skipDependents(tx: Tx, dead: Pick<JobRow, "id" | "modelId">, why: "failed" | "canceled") {
   const name = getModel(dead.modelId)?.name ?? dead.modelId;
   const reason = why === "canceled" ? `Входная нода «${name}» отменена` : `Не выполнилась входная нода «${name}»`;
-  const rows = await db.execute<RawJob>(sql`
+  const rows = await tx.execute<RawJob>(sql`
     update jobs set status = 'skipped', finished_at = now(), error = ${reason}
     where status = 'queued' and ${dead.id}::uuid = any(depends_on)
     returning id, model_id
   `);
-  for (const r of rows) await skipDependents({ id: r.id as string, modelId: r.model_id as string }, why);
+  for (const r of rows) {
+    await settleJob(tx, r.id as string, null, null);
+    await skipDependents(tx, { id: r.id as string, modelId: r.model_id as string }, why);
+  }
 }
 
 /**

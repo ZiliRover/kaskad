@@ -1,25 +1,26 @@
 "use client";
 
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
-import { StopIcon } from "@phosphor-icons/react";
+import { PlusIcon, StopIcon } from "@phosphor-icons/react";
 import { memo, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { estimate } from "@/lib/models/pricing";
-import { formatRub, priceTitle } from "@/lib/money";
+import { formatKop, formatRub, priceTitle, toKop } from "@/lib/money";
 import { getModel, isBlocked, TOOL_PREFIX } from "@/lib/models/registry";
 import type { MediaKind, ParamValue } from "@/lib/models/types";
-import { CapIcons } from "../icons";
 import { isActive, useStudio, type ModelNodeT } from "../store";
 import { NodeShell } from "./NodeShell";
 import { ParamField } from "./ParamField";
 import { ResultView } from "./ResultView";
 
 const KIND_LABEL: Record<MediaKind, string> = { image: "Картинка", video: "Видео", text: "Текст" };
-const PROMPT_HINT: Record<MediaKind, string> = {
-  image: "Что изобразить: объект, стиль, свет, композиция",
-  video: "Что происходит в кадре и как движется камера",
-  text: "Задача для модели, например «Придумай 3 идеи для рекламы кофе»",
-};
+
+/** The node still has the model and settings of its last run, so that run's price is the price. */
+function sameSettings(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) if (JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null)) return false;
+  return true;
+}
 
 function useElapsed(since: string | null | undefined, on: boolean) {
   const [now, setNow] = useState(() => Date.now());
@@ -35,18 +36,24 @@ function useElapsed(since: string | null | undefined, on: boolean) {
 
 export const ModelNode = memo(function ModelNode({ id, data, selected }: NodeProps<ModelNodeT>) {
   const spec = getModel(data.modelId);
-  const { updateData, run, cancel } = useStudio(useShallow((s) => ({
-    updateData: s.updateData, run: s.run, cancel: s.cancel,
+  const { updateData, run, cancel, addPromptFor } = useStudio(useShallow((s) => ({
+    updateData: s.updateData, run: s.run, cancel: s.cancel, addPromptFor: s.addPromptFor,
   })));
   const isTool = data.modelId.startsWith(TOOL_PREFIX);
   const blocked = useStudio((s) => isBlocked(data.modelId, s.blockedVendors));
-  const hasPromptPort = !!spec?.inputs.some((p) => p.key === "prompt");
   const fx = useStudio((s) => s.fx);
   const node = useStudio((s) => s.state[id]);
   const active = useStudio((s) => isActive(s.state, id));
   const submitting = useStudio((s) => !!s.submitting[id]);
   const localError = useStudio((s) => s.localErrors[id]);
   const wired = useStudio(useShallow((s) => s.edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? "")));
+  // prompt length drives the price of text models; a model's text output counts as a typical prompt
+  const promptChars = useStudio((s) => s.edges
+    .filter((e) => e.target === id && e.targetHandle === "prompt")
+    .reduce((sum, e) => {
+      const src = s.nodes.find((n) => n.id === e.source);
+      return sum + (src?.type === "prompt" ? src.data.text.length : 400);
+    }, 0));
 
   const busy = active || submitting;
   const job = node?.job;
@@ -54,16 +61,21 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
 
   const counts: Record<string, number> = {};
   for (const h of wired) counts[h] = (counts[h] ?? 0) + 1;
-  const promptWired = (counts.prompt ?? 0) > 0;
 
   // handles move when the model (its ports) or the layout above them changes
   const updateInternals = useUpdateNodeInternals();
-  useEffect(() => { updateInternals(id); }, [id, data.modelId, promptWired, updateInternals]);
+  useEffect(() => { updateInternals(id); }, [id, data.modelId, updateInternals]);
 
   const setParam = (key: string, v: ParamValue) =>
     updateData<ModelNodeT>(id, { params: { ...data.params, [key]: v } });
 
-  const est = spec ? estimate(spec, { params: data.params, inputCounts: counts, promptChars: data.prompt.length }) : null;
+  const est = spec ? estimate(spec, { params: data.params, inputCounts: counts, promptChars }) : null;
+
+  // after a successful run the node shows what it actually cost, until its settings change
+  const finalKop = job?.status === "succeeded"
+    ? job.chargedKop ?? (job.costUsd !== null ? toKop(job.costUsd, fx) : null)
+    : null;
+  const showFinal = finalKop !== null && job!.modelId === data.modelId && sameSettings(job!.params, data.params);
 
   let status: { text: string; tone?: "error" | "ok" } | null = null;
   if (localError) status = { text: localError, tone: "error" };
@@ -76,7 +88,8 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
   else if (job?.status === "failed" || job?.status === "skipped") status = { text: job.error ?? "Ошибка", tone: "error" };
   else if (job?.status === "canceled") status = { text: "Остановлено" };
   else if (job?.status === "succeeded") {
-    status = { text: job.costUsd ? `Готово, ${formatRub(job.costUsd, fx)}` : "Готово", tone: "ok" };
+    // settings changed since: the price slot shows the next run's estimate, so name the old cost here
+    status = { text: finalKop !== null && !showFinal ? `Готово, ${formatKop(finalKop)}` : "Готово", tone: "ok" };
   }
 
   const footer = (
@@ -100,11 +113,13 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       {status && (
         <span className={`node-status${status.tone ? ` is-${status.tone}` : ""}`} title={status.text}>{status.text}</span>
       )}
-      {est && est.usd !== null && (isTool ? (
+      {isTool ? (
         <span className="node-price" title="Выполняется на нашем сервере">бесплатно</span>
-      ) : (
+      ) : showFinal ? (
+        <span className="node-price is-final" title="Итоговая стоимость последнего запуска">{formatKop(finalKop!)}</span>
+      ) : est && est.usd !== null && (
         <span className="node-price" title={`Оценка запуска: ${priceTitle(est.usd, fx)}`}>{est.approx ? "≈ " : ""}{formatRub(est.usd, fx)}</span>
-      ))}
+      )}
     </div>
   );
 
@@ -126,12 +141,6 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
           {spec?.vendor} не обслуживает регион сервера. Перетащи на эту ноду модель другого производителя.
         </div>
       )}
-      {spec && (spec.blurb || spec.caps) && (
-        <div className="model-sub">
-          {spec.blurb && <span className="model-blurb">{spec.blurb}</span>}
-          <CapIcons caps={spec.caps} />
-        </div>
-      )}
 
       {spec && (
         <div className="ports">
@@ -140,29 +149,28 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
             const needed = n < p.min;
             const meta = n
               ? (p.max > 1 ? `${n} из ${p.max}` : "подключено")
-              : p.key === "prompt"
-                ? (spec.promptOptional ? "необязательно" : "или напиши ниже")
-                : needed ? "обязательно"
-                  : [p.hint, p.max > 1 ? `до ${p.max}` : null].filter(Boolean).join(", ") || "необязательно";
+              : needed ? "обязательно"
+                : [p.hint, p.max > 1 ? `до ${p.max}` : null].filter(Boolean).join(", ") || "необязательно";
+            const addPrompt = p.key === "prompt" && !n;
             return (
               <div className={`port-row${n ? " is-wired" : ""}${needed ? " is-needed" : ""}`} key={p.key}>
                 <Handle type="target" position={Position.Left} id={p.key} className={`handle handle-${p.dtype}`} />
                 <span className="port-label">{p.label}</span>
-                <span className="port-meta">{meta}</span>
+                {addPrompt ? (
+                  <button
+                    type="button" className="port-add nodrag"
+                    title="Добавить ноду «Промт» и подключить сюда"
+                    onClick={() => addPromptFor(id)}
+                  >
+                    <PlusIcon size={11} weight="bold" aria-hidden />{spec.promptOptional ? "промт, если нужен" : "добавить промт"}
+                  </button>
+                ) : (
+                  <span className="port-meta">{meta}</span>
+                )}
               </div>
             );
           })}
         </div>
-      )}
-
-      {hasPromptPort && !promptWired && (
-        <textarea
-          className="field nodrag nowheel"
-          rows={3}
-          value={data.prompt}
-          placeholder={spec?.promptOptional ? "Промт (необязательно)" : PROMPT_HINT[data.kind]}
-          onChange={(e) => updateData<ModelNodeT>(id, { prompt: e.target.value })}
-        />
       )}
 
       {spec && spec.params.length > 0 && (

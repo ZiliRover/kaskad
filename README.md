@@ -27,7 +27,8 @@
 
 - **Every OpenRouter video and image model on one canvas.** 28 video models (Seedance, Veo, Kling, Sora, Wan, Hailuo, Runway…), 53 image models (Nano Banana, GPT Image, Seedream, FLUX, Recraft…) and a few text models for writing prompts.
 - **Nodes show exactly what a model accepts.** First and last frame, image references, video and audio references for Seedance 2, a source video for edit and upscale models. Required inputs are marked; wires only connect matching types.
-- **Price before you run.** Every node shows its estimate in rubles at the daily Central Bank rate; running more than one node asks for confirmation with the total.
+- **Price before you run, pay in rubles.** Every node shows its price in rubles at the daily Central Bank rate. A run reserves its estimate from the prepaid balance and is charged what the provider actually billed; failed generations cost nothing.
+- **Sign in with an email code.** No passwords. Every account has its own canvas, files and balance, tops up by card through YooKassa, and gets a welcome bonus to try things.
 - **Variants, versions, and what flows next.** Generate up to 4 images at once, click the best one, and that is what the next node receives. Older results stay browsable.
 - **Long videos without an editor.** Built-in tools take the last frame of a clip for the next scene and join clips into one video (ffmpeg, free).
 - **A studio, not a demo.** Templates, a results gallery you can drag back onto the canvas, prompt improvement and translation, notes and groups, copy/paste, undo for deletions, drop or paste files from your computer.
@@ -39,6 +40,7 @@
 | **Models come from data, not code** | `npm run models:sync` pulls capabilities and prices from OpenRouter's catalogs. A new model shows up with the right inputs and controls without UI work. |
 | **One planner, two places** | The same function prices a run in the browser and builds the executed plan on the server, so the confirmation always matches what runs. |
 | **Generations survive anything** | Jobs live in Postgres and run in a separate worker. Closing the tab, reloading or redeploying the web app doesn't stop them; a restarted worker resumes a video by its provider id instead of paying twice. |
+| **Money is a ledger** | Balances are never stored, only derived from kopeck entries: hold, release, charge, top-up, bonus. Each job settles exactly once in the same transaction as its result, and a payment credits once no matter how many webhooks arrive. |
 | **Failures explain themselves** | If an input node fails or is stopped, every node downstream says which one and why. A failed rerun never erases the previous result. |
 
 <p align="center">
@@ -57,7 +59,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open <http://localhost:3000>. `npm run dev` starts three processes:
+Open <http://localhost:3000> and sign in with any email: without `SMTP_URL` the code is printed in the server console and shown on the form. `npm run dev` starts three processes:
 
 | Process | Job |
 | --- | --- |
@@ -68,7 +70,7 @@ Open <http://localhost:3000>. `npm run dev` starts three processes:
 Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 
 > [!NOTE]
-> The studio starts in **test mode** (`PROVIDER_MODE=mock`): generations are free placeholders and a badge in the header says so. Put your key in `KASKAD_OPENROUTER_KEY` and set `PROVIDER_MODE=live` for real generations, which are billed to your OpenRouter balance.
+> The studio starts in **test mode** (`PROVIDER_MODE=mock`): generations are placeholders, balances move by the estimate, and a badge in the header says so. Top-ups use a local test checkout (`PAYMENTS_PROVIDER=test`) where no money moves. Put your key in `KASKAD_OPENROUTER_KEY` and set `PROVIDER_MODE=live` for real generations, which are billed to your OpenRouter balance.
 
 <details>
 <summary><b>Environment variables</b></summary>
@@ -86,6 +88,13 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `BLOCKED_VENDORS` | | vendors that refuse the server's region, e.g. `google` from Russia; their models are marked unavailable |
 | `PUBLIC_BASE_URL` | | public https address of the server; providers download video/audio inputs by signed link |
 | `FILE_URL_SECRET` | derived | secret for those signed links |
+| `ADMIN_EMAILS` | everyone in dev | operators; they also see the OpenRouter account balance in rubles |
+| `PRICE_MARKUP` | `1.5` | user price = provider cost × Central Bank rate × markup |
+| `WELCOME_BONUS_RUB` | `50` | credited once to each new account |
+| `SMTP_URL` / `MAIL_FROM` | | mail for login codes (`smtps://user:pass@host:465`); without it, dev prints codes to the console |
+| `PAYMENTS_PROVIDER` | `test` in dev | `yookassa` for real payments; webhook: `<APP_URL>/api/payments/webhook` |
+| `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY` | | YooKassa shop credentials |
+| `APP_URL` | `PUBLIC_BASE_URL` | where the checkout returns the user |
 
 </details>
 
@@ -124,10 +133,10 @@ Refresh the catalog with `npm run models:sync`. `src/lib/models/curation.ts` add
 
 ```text
 src/
-  app/          pages and API routes (graphs, runs, jobs, uploads, files, enhance)
+  app/          pages (studio, login, test checkout) and API routes (auth, billing, payments, graphs, runs, jobs, uploads, files, enhance)
   components/   the studio: canvas, nodes, palette, gallery, templates
   lib/          shared by browser and server: graph schema, planner, models, prices, templates
-  server/       database, storage, providers, ffmpeg tools, worker
+  server/       database, auth, billing ledger, payments, storage, providers, ffmpeg tools, worker
 scripts/        local Postgres, model sync
 drizzle/        SQL migrations
 prototype/      the original desktop app, kept for reference
@@ -148,11 +157,11 @@ This is the core of the product. A live run on real models (GPT Image 2 → Seed
 - **Google models are blocked from Russia** ("Blocked by Google AI Studio"): Nano Banana, Veo and Gemini need a generation server abroad. Set `BLOCKED_VENDORS=google` meanwhile; OpenAI, Anthropic, ByteDance, Alibaba and others work.
 - **Seedance refuses frames that look like a real person** (provider privacy filter). The studio explains this on the node and suggests stylized frames or other models.
 - **Video and audio inputs need a public https server address.** Providers accept them only as links, not inline files; without `PUBLIC_BASE_URL` those runs stop before anything is billed.
-- **No accounts or payments yet.** There is one shared graph and no login. Do not expose it to the internet with a real key.
+- **Payments are wired, not yet live.** YooKassa needs a shop (self-employed status works) and a public https address for the webhook; until then top-ups run through the test checkout. Receipts for "Мой налог" come from YooKassa's own integration.
 - **Reference limits for video models are estimates.** OpenRouter doesn't publish them; providers report an error on the node if a limit is exceeded.
 - **Graph saves are last-write-wins.** Two open tabs of the same graph can overwrite each other.
 
-Next up: accounts, ruble credits and payments. The product plan (in Russian) is in [PRODUCT.md](./PRODUCT.md).
+Next up: hosting (a server abroad for Google models, S3 storage, public https) and the closed beta. The product plan (in Russian) is in [PRODUCT.md](./PRODUCT.md).
 
 ## License
 

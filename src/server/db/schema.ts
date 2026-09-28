@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uuid,
+  bigint, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { JobInput } from "@/lib/jobs";
@@ -37,6 +37,10 @@ export const jobs = pgTable("jobs", {
   runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: "cascade" }),
   graphId: text("graph_id").notNull().references(() => graphs.id, { onDelete: "cascade" }),
   nodeId: text("node_id").notNull(),
+  /** who pays; null only for jobs created before accounts existed */
+  userId: uuid("user_id"),
+  /** kopecks reserved from the balance when the job was queued */
+  holdKop: bigint("hold_kop", { mode: "number" }).notNull().default(0),
   kind: mediaKind("kind").notNull(),
   modelId: text("model_id").notNull(),
   input: jsonb("input").$type<JobInput>().notNull(),
@@ -74,3 +78,69 @@ export const outputs = pgTable("outputs", {
 
 export type JobRow = typeof jobs.$inferSelect;
 export type OutputRow = typeof outputs.$inferSelect;
+
+// ---------------------------------------------------------------- accounts and money
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Opaque session tokens; only their SHA-256 is stored. */
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (t) => [index("sessions_user_idx").on(t.userId)]);
+
+/** One-time email login codes (hashed), with attempt counting. */
+export const loginCodes = pgTable("login_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  codeHash: text("code_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+}, (t) => [index("login_codes_email_idx").on(t.email, t.createdAt)]);
+
+export const ledgerKind = pgEnum("ledger_kind", ["topup", "bonus", "hold", "release", "charge", "adjust"]);
+
+/**
+ * Every money movement, in kopecks. The balance is the sum; nothing stores it separately,
+ * so it can always be audited and re-derived.
+ */
+export const ledger = pgTable("ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  amountKop: bigint("amount_kop", { mode: "number" }).notNull(),
+  kind: ledgerKind("kind").notNull(),
+  jobId: uuid("job_id"),
+  paymentId: uuid("payment_id"),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("ledger_user_idx").on(t.userId, t.createdAt),
+  // settlement is exactly-once per job and kind, and a payment tops up once
+  uniqueIndex("ledger_job_kind_uq").on(t.jobId, t.kind),
+  uniqueIndex("ledger_payment_uq").on(t.paymentId),
+]);
+
+export const paymentStatus = pgEnum("payment_status", ["pending", "succeeded", "canceled"]);
+
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  amountKop: bigint("amount_kop", { mode: "number" }).notNull(),
+  status: paymentStatus("status").notNull().default("pending"),
+  externalId: text("external_id"),
+  confirmationUrl: text("confirmation_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+}, (t) => [index("payments_user_idx").on(t.userId, t.createdAt)]);
+
+export type UserRow = typeof users.$inferSelect;
+export type LedgerRow = typeof ledger.$inferSelect;

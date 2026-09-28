@@ -251,3 +251,23 @@ export const openRouter: Provider = {
     return { text: text.trim(), costUsd: cost(d) };
   },
 };
+
+const g = globalThis as unknown as { __orBalance?: { usd: number; at: number } };
+
+/** What is left on the OpenRouter account (credits bought minus used), cached for a minute. */
+export async function accountBalanceUsd(): Promise<number | null> {
+  const k = apiKeySource()?.key;
+  if (!k) return null;
+  if (g.__orBalance && Date.now() - g.__orBalance.at < 60_000) return g.__orBalance.usd;
+  try {
+    const r = await fetch(`${BASE}/credits`, { headers: { Authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(5000), cache: "no-store" });
+    if (!r.ok) return null;
+    const d = (await r.json())?.data;
+    const usd = Number(d?.total_credits) - Number(d?.total_usage);
+    if (!Number.isFinite(usd)) return null;
+    g.__orBalance = { usd, at: Date.now() };
+    return usd;
+  } catch {
+    return g.__orBalance?.usd ?? null;
+  }
+}

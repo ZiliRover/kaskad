@@ -15,6 +15,13 @@
       "when": 1790352314091,
       "tag": "0001_graph_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790599885474,
+      "tag": "0002_accounts_ledger",
+      "breakpoints": true
     }
   ]
 }

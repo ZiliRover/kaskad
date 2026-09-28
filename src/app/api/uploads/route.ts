@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/server/auth";
 import { fileUrl, newKey, putFile } from "@/server/storage";
 
 const MB = 1024 * 1024;
@@ -19,6 +20,8 @@ const ACCEPTED: Record<string, { kind: "image" | "video" | "audio"; max: number 
 const LIMIT_TEXT = { image: "20 МБ", video: "50 МБ", audio: "20 МБ" };
 
 export async function POST(req: Request) {
+  const { user, deny } = await requireUser();
+  if (deny) return deny;
   // reject oversized bodies before buffering them (multipart adds a little overhead)
   const declared = Number(req.headers.get("content-length") ?? 0);
   if (declared > 50 * MB + 64 * 1024) {
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Файл больше ${LIMIT_TEXT[rule.kind]}` }, { status: 413 });
   }
 
-  const key = newKey("uploads", file.type);
+  const key = newKey(`uploads/${user.id}`, file.type);
   await putFile(key, new Uint8Array(await file.arrayBuffer()));
   return NextResponse.json({ key, url: fileUrl(key), kind: rule.kind });
 }

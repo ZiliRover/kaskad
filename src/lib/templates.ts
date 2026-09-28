@@ -23,12 +23,12 @@ const file = (id: string, position: P, kind: "image" | "video" | "audio"): Graph
   ({ id, type: "image", position, data: { fileKey: null, name: "", kind } });
 const note = (id: string, position: P, text: string): GraphNode => ({ id, type: "note", position, data: { text, color: "yellow" } });
 
-function model(id: string, position: P, modelId: string, opts: { prompt?: string; params?: Record<string, ParamValue> } = {}): GraphNode {
+function model(id: string, position: P, modelId: string, opts: { params?: Record<string, ParamValue> } = {}): GraphNode {
   const spec = getModel(modelId);
   if (!spec) throw new Error(`template model missing: ${modelId}`);
   return {
     id, type: "model", position,
-    data: { kind: spec.kind, modelId, prompt: opts.prompt ?? "", params: { ...defaultParams(spec), ...opts.params } },
+    data: { kind: spec.kind, modelId, prompt: "", params: { ...defaultParams(spec), ...opts.params } },
   };
 }
 
@@ -46,8 +46,8 @@ export const TEMPLATES: Template[] = [
         file("photo", { x: 0, y: 0 }, "image"),
         prompt("brief", { x: 0, y: 300 }, "Карточка товара для маркетплейса: товар с фото на чистом светлом фоне, мягкие студийные тени, 3 главных преимущества короткими фразами на русском, современная аккуратная типографика"),
         model("card", { x: 420, y: 0 }, "openai/gpt-image-2", { params: { aspect_ratio: "3:4", n: "4" } }),
-        model("clip", { x: 860, y: 0 }, "bytedance/seedance-2.0-fast", {
-          prompt: "Медленный облёт камеры вокруг товара, студийный свет, лёгкие блики",
+        prompt("motion", { x: 860, y: 260 }, "Медленный облёт камеры вокруг товара, студийный свет, лёгкие блики"),
+        model("clip", { x: 1280, y: 0 }, "bytedance/seedance-2.0-fast", {
           params: { aspect_ratio: "3:4", generate_audio: false },
         }),
         note("tip", { x: 420, y: -170 }, "Загрузи фото товара, запусти видео: карточка сгенерируется сама. Кликни лучший вариант, он пойдёт в видео."),
@@ -56,6 +56,7 @@ export const TEMPLATES: Template[] = [
         wire("photo", "image", "card", "references"),
         wire("brief", "text", "card", "prompt"),
         wire("card", "image", "clip", "first_frame"),
+        wire("motion", "text", "clip", "prompt"),
       ],
     }),
   },
@@ -71,14 +72,14 @@ export const TEMPLATES: Template[] = [
           params: { system: "Преврати идею в подробный промт для кинематографичного кадра: объект, окружение, свет, объектив, стиль. Ответь только промтом." },
         }),
         model("frame", { x: 820, y: 0 }, "openai/gpt-image-2"),
-        model("clip", { x: 1240, y: 0 }, "bytedance/seedance-2.0-fast", {
-          prompt: "Камера плавно движется вперёд, пар поднимается над чашкой, капли стекают по стеклу",
-        }),
+        prompt("motion", { x: 1240, y: 260 }, "Камера плавно движется вперёд, пар поднимается над чашкой, капли стекают по стеклу"),
+        model("clip", { x: 1660, y: 0 }, "bytedance/seedance-2.0-fast"),
       ],
       edges: [
         wire("idea", "text", "writer", "prompt"),
         wire("writer", "text", "frame", "prompt"),
         wire("frame", "image", "clip", "first_frame"),
+        wire("motion", "text", "clip", "prompt"),
       ],
     }),
   },
@@ -134,13 +135,13 @@ export const TEMPLATES: Template[] = [
     build: () => ({
       nodes: [
         file("src", { x: 0, y: 0 }, "image"),
-        model("describe", { x: 400, y: 0 }, "deepseek/deepseek-v4.1-flash", {
-          prompt: "Опиши картинку как промт для генерации: объекты, композиция, свет, цвета. Добавь в конце: в стиле плоской векторной иллюстрации.",
-        }),
+        prompt("ask", { x: 0, y: 300 }, "Опиши картинку как промт для генерации: объекты, композиция, свет, цвета. Добавь в конце: в стиле плоской векторной иллюстрации."),
+        model("describe", { x: 400, y: 0 }, "deepseek/deepseek-v4.1-flash"),
         model("draw", { x: 820, y: 0 }, "recraft/recraft-v4.1"),
       ],
       edges: [
         wire("src", "image", "describe", "images"),
+        wire("ask", "text", "describe", "prompt"),
         wire("describe", "text", "draw", "prompt"),
       ],
     }),

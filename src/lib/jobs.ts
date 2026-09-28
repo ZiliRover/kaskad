@@ -22,6 +22,11 @@ export interface NodeState {
     status: JobStatus;
     error: string | null;
     costUsd: number | null;
+    /** what the user was actually charged, in kopecks (null until settled or for free jobs) */
+    chargedKop: number | null;
+    /** model and settings of that run, to tell whether the node still matches it */
+    modelId: string;
+    params: Record<string, unknown>;
     createdAt: string;
     startedAt: string | null;
   } | null;

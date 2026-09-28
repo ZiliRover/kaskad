@@ -79,7 +79,7 @@ export function planRun(opts: PlanOptions): PlanResult {
     if (!ports.prompt) {
       const text = node.data.prompt.trim();
       if (text) ports.prompt = [{ type: "text", text }];
-      else if (!spec.promptOptional) throw new PlanError(nodeId, "Нет промта: напиши его в ноде или подключи ноду «Промт»");
+      else if (!spec.promptOptional) throw new PlanError(nodeId, "Нет промта: подключи ноду «Промт»");
     }
 
     const promptChars = (ports.prompt ?? []).reduce((s, r) => s + (r.type === "text" ? r.text.length : 400), 0);

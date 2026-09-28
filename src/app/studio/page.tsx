@@ -1,13 +1,24 @@
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Studio } from "@/components/studio/Studio";
+import { isAdmin } from "@/server/admin";
+import { currentUser } from "@/server/auth";
+import { balanceKop, reservedKop } from "@/server/billing";
 import { getFx } from "@/server/fx";
-import { DEFAULT_GRAPH_ID, graphState, loadGraph } from "@/server/graphs";
+import { graphState, userGraph } from "@/server/graphs";
+import { paymentsProvider } from "@/server/payments";
 import { blockedVendors, providerMode } from "@/server/providers";
+import { accountBalanceUsd } from "@/server/providers/openrouter";
 
 export default async function StudioPage() {
-  await connection(); // per-request: reads the database
-  const [graph, fx] = await Promise.all([loadGraph(DEFAULT_GRAPH_ID), getFx()]);
-  if (!graph) throw new Error("default graph missing");
+  await connection(); // per-request: reads the session and the database
+  const user = await currentUser();
+  if (!user) redirect("/login");
+  const admin = isAdmin(user);
+  const [graph, fx, available, reserved, providerUsd] = await Promise.all([
+    userGraph(user.id), getFx(), balanceKop(user.id), reservedKop(user.id),
+    admin ? accountBalanceUsd() : Promise.resolve(null),
+  ]);
   return (
     <Studio
       graphId={graph.id}
@@ -17,6 +28,10 @@ export default async function StudioPage() {
       providerMode={providerMode()}
       fx={fx}
       blockedVendors={blockedVendors()}
+      account={{
+        email: user.email, availableKop: available, reservedKop: reserved, payments: paymentsProvider(),
+        admin, providerUsd,
+      }}
     />
   );
 }

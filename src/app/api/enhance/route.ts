@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { requireUser } from "@/server/auth";
 import { getProvider, ProviderError } from "@/server/providers";
 
 /** Cheap, fast model: rewriting a prompt costs a fraction of a kopeck. */
@@ -28,7 +29,17 @@ function system(mode: "improve" | "translate", target: keyof typeof TARGET_HINT 
   ].join(" ");
 }
 
+// rewriting a prompt costs a fraction of a kopeck, so it is free, but not unlimited
+const recent = new Map<string, number[]>();
+const PER_MINUTE = 20;
+
 export async function POST(req: Request) {
+  const { user, deny } = await requireUser();
+  if (deny) return deny;
+  const now = Date.now();
+  const hits = (recent.get(user.id) ?? []).filter((t) => now - t < 60_000);
+  if (hits.length >= PER_MINUTE) return NextResponse.json({ error: "Слишком часто. Подождите минуту." }, { status: 429 });
+  recent.set(user.id, [...hits, now]);
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Нечего улучшать" }, { status: 400 });
   const { text, target, mode } = parsed.data;

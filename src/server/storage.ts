@@ -30,7 +30,7 @@ export function mimeForKey(key: string): string {
   return MIME_BY_EXT[key.split(".").pop() ?? ""] ?? "application/octet-stream";
 }
 
-export function newKey(prefix: "uploads" | `outputs/${string}`, mime: string): string {
+export function newKey(prefix: `uploads/${string}` | `outputs/${string}`, mime: string): string {
   const ext = EXT_BY_MIME[mime];
   if (!ext) throw new Error(`unsupported mime ${mime}`);
   return `${prefix}/${randomUUID()}.${ext}`;

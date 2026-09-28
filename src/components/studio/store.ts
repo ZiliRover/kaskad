@@ -7,6 +7,7 @@ import {
 import { create } from "zustand";
 import type { GraphDoc, GroupData, ImageData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
+import { liftInlinePrompts } from "@/lib/graph/lift";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
 import { defaultModel, defaultParams, getModel, reconcileParams } from "@/lib/models/registry";
 import type { Template } from "@/lib/templates";
@@ -22,6 +23,19 @@ export type GroupNodeT = Node<GroupData, "group">;
 export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT;
 
 export interface Toast { id: number; text: string; error?: boolean; action?: { label: string; run: () => void } }
+export interface Account {
+  email: string;
+  /** spendable now: reservations of running jobs are already subtracted */
+  availableKop: number;
+  reservedKop: number;
+  /** null: top-ups are switched off on this server */
+  payments: "test" | "yookassa" | null;
+  /** operator of the service (ADMIN_EMAILS) */
+  admin: boolean;
+  /** what is left on the OpenRouter account, operators only */
+  providerUsd: number | null;
+}
+
 export interface ConfirmRequest { title: string; body: string; confirm: string; resolve: (ok: boolean) => void }
 
 interface StudioStore {
@@ -44,6 +58,8 @@ interface StudioStore {
   templatesOpen: boolean;
   /** vendors this server can't reach (see BLOCKED_VENDORS) */
   blockedVendors: string[];
+  account: Account | null;
+  billingOpen: boolean;
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -52,6 +68,8 @@ interface StudioStore {
   setViewport(v: Viewport): void;
   /** Adds a node and returns its id. exact: keep the position (drop at cursor); otherwise nudge to free space */
   addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean }): string;
+  /** Create a Prompt node left of a model node and wire it into its prompt input */
+  addPromptFor(nodeId: string): void;
   /** Upload files and place one upload node per file, fanned out from `at` */
   addFiles(files: File[], at: { x: number; y: number }): Promise<void>;
   /** Fill an upload node; wires the new file type can't feed are removed */
@@ -65,7 +83,8 @@ interface StudioStore {
   groupSelection(): void;
   /** Drop a template next to the existing graph; returns the new node ids */
   insertTemplate(t: Template): string[];
-  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean }): void;
+  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean; billingOpen?: boolean }): void;
+  refreshBalance(): Promise<void>;
   updateData<T extends StudioNode>(id: string, patch: Partial<T["data"]>): void;
   setModel(id: string, modelId: string): void;
   removeNode(id: string): void;
@@ -194,7 +213,7 @@ function flushSave() {
   // chain saves so an older one can never land after a newer one
   saving = saving.then(() =>
     fetch(`/api/graphs/${graphId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body })
-      .then((r) => { if (!r.ok) throw new Error(); })
+      .then((r) => { if (authLost(r)) return; if (!r.ok) throw new Error(); })
       .catch(() => useStudio.getState().toast("Не удалось сохранить изменения. Проверьте соединение.", true)),
   );
   return saving;
@@ -202,6 +221,13 @@ function flushSave() {
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => { if (saveTimer) flushSave(); });
+}
+
+/** The session ended (logged out elsewhere, expired): back to sign-in, keeping nothing half-done. */
+export function authLost(r: Response): boolean {
+  if (r.status !== 401) return false;
+  if (typeof window !== "undefined") window.location.assign("/login");
+  return true;
 }
 
 // ---------------------------------------------------------------- polling
@@ -212,6 +238,7 @@ export async function refreshState() {
   const { graphId } = useStudio.getState();
   try {
     const r = await fetch(`/api/graphs/${graphId}/state`, { cache: "no-store" });
+    if (authLost(r)) return;
     if (r.ok) useStudio.getState().setState(await r.json());
   } catch { /* transient; next poll retries */ }
 }
@@ -223,6 +250,7 @@ function ensurePolling() {
     const { state, submitting } = useStudio.getState();
     const busy = Object.keys(submitting).length > 0 || Object.keys(state).some((id) => isActive(state, id));
     pollTimer = busy ? setTimeout(loop, 1500) : null;
+    if (!busy) void useStudio.getState().refreshBalance(); // everything settled: show the final charge
   };
   pollTimer = setTimeout(loop, 400);
 }
@@ -251,10 +279,12 @@ export const useStudio = create<StudioStore>((set, get) => ({
   toasts: [],
   confirm: null,
   lightbox: null,
-  fx: { usdRub: 85, date: "", source: "fallback" },
+  fx: { usdRub: 85, date: "", source: "fallback", markup: 1.5 },
   trash: null,
   galleryOpen: false,
   templatesOpen: false,
+  account: null,
+  billingOpen: false,
   blockedVendors: [],
 
   setPanel(p) {
@@ -262,7 +292,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   },
 
   insertTemplate(t) {
-    const { nodes: tn, edges: te } = t.build();
+    const { nodes: tn, edges: te } = liftInlinePrompts(t.build()).doc;
     const existing = get().nodes;
     // to the right of everything already on the canvas, top-aligned with it
     const right = existing.length ? Math.max(...existing.map((n) => n.position.x + (n.measured?.width ?? 340))) + 160 : 0;
@@ -282,9 +312,22 @@ export const useStudio = create<StudioStore>((set, get) => ({
   },
 
   init(graphId, doc, state, fx) {
-    const { nodes, edges } = fromDoc(doc);
+    const lifted = liftInlinePrompts(doc);
+    const { nodes, edges } = fromDoc(lifted.doc);
     set({ graphId, nodes, edges, viewport: doc.viewport ?? { x: 80, y: 80, zoom: 1 }, state, fx });
+    if (lifted.changed) scheduleSave();
     if (Object.keys(state).some((id) => isActive(state, id))) ensurePolling();
+  },
+
+  addPromptFor(nodeId) {
+    const target = get().nodes.find((n) => n.id === nodeId);
+    if (!target) return;
+    const position = freeSpot(get().nodes, { x: target.position.x - 380, y: target.position.y });
+    const id = newId("n");
+    const node = present({ id, type: "prompt", position, data: { text: "" }, selected: true } as StudioNode);
+    const edge: Edge = { id: newId("e"), source: id, sourceHandle: "text", target: nodeId, targetHandle: "prompt", className: edgeClass({ sourceHandle: "text" }) };
+    set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), node], edges: [...s.edges, edge] }));
+    scheduleSave();
   },
 
   onNodesChange(changes) {
@@ -476,6 +519,24 @@ export const useStudio = create<StudioStore>((set, get) => ({
     set({ state });
   },
 
+  async refreshBalance() {
+    const account = get().account;
+    if (!account) return;
+    try {
+      const [r, pr] = await Promise.all([
+        fetch("/api/billing", { cache: "no-store" }),
+        account.admin ? fetch("/api/admin/provider-balance", { cache: "no-store" }).catch(() => null) : null,
+      ]);
+      if (authLost(r) || !r.ok) return;
+      const b = await r.json();
+      const p = pr?.ok ? await pr.json() : null;
+      set({ account: {
+        ...get().account!, availableKop: b.balanceKop, reservedKop: b.reservedKop,
+        providerUsd: p ? p.usd : account.providerUsd,
+      } });
+    } catch { /* keep the last known balance */ }
+  },
+
   toast(text, error, action) {
     const id = ++toastSeq;
     set((s) => ({ toasts: [...s.toasts, { id, text, error, action }] }));
@@ -502,13 +563,14 @@ export const useStudio = create<StudioStore>((set, get) => ({
     if (job.status === "running" && get().nodes.find((n) => n.id === nodeId && n.type === "model" && n.data.kind === "video")) {
       const ok = await get().ask({
         title: "Остановить генерацию?",
-        body: "Провайдер уже делает это видео. Если остановить, оплату за него могут всё равно списать, а результат не сохранится.",
+        body: "Провайдер уже делает это видео и возьмёт за него оплату. Если остановить, стоимость спишется, а результат не сохранится.",
         confirm: "Остановить",
       });
       if (!ok) return;
     }
     try {
       const r = await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+      if (authLost(r)) return;
       if (!r.ok && r.status !== 409) throw new Error();
     } catch {
       get().toast("Не удалось отменить. Проверьте соединение.", true);
@@ -577,13 +639,18 @@ export const useStudio = create<StudioStore>((set, get) => ({
         // fresh snapshot: pins of re-running nodes were just cleared
         body: JSON.stringify({ graphId, doc: toDoc(get().nodes, get().edges, get().viewport), targets, mode }),
       });
+      if (authLost(r)) return;
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
+      if (r.status === 402) {
+        const canPay = !!get().account?.payments;
+        get().toast(data.error ?? "Не хватает средств", true,
+          canPay ? { label: "Пополнить", run: () => get().setPanel({ billingOpen: true }) } : undefined);
+      } else if (!r.ok) {
         const msg = data.error ?? "Не удалось запустить";
         if (data.nodeId) set((s) => ({ localErrors: { ...s.localErrors, [data.nodeId]: msg } }));
         else get().toast(msg, true);
       }
-      await refreshState();
+      await Promise.all([refreshState(), get().refreshBalance()]);
     } catch {
       get().toast("Нет связи с сервером", true);
     } finally {

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { BRAND } from "@/config/brand";
 import { formatKop, formatUsd } from "@/lib/money";
 import type { ProjectSummary } from "@/lib/projects";
+import { Agent } from "./Agent";
 import { Projects } from "./Projects";
 import { isActive, useStudio } from "./store";
 import { useTheme, type ThemeMode } from "./theme";
@@ -112,6 +113,7 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
             Тестовый режим
           </span>
         )}
+        <Agent />
         <button type="button" className="btn btn-ghost" aria-label="Шаблоны" title="Шаблоны" onClick={() => setPanel({ templatesOpen: true })}>
           <LayoutIcon size={15} aria-hidden /><span className="tb-label">Шаблоны</span>
         </button>

@@ -9,7 +9,7 @@ import { TEMPLATES, templateChain } from "@/lib/templates";
 import { NodeIcon, type NodeKey } from "./icons";
 import { useStudio } from "./store";
 
-function iconFor(n: GraphNode): NodeKey {
+export function iconFor(n: GraphNode): NodeKey {
   if (n.type === "prompt") return "prompt";
   if (n.type === "image") return `upload:${n.data.kind ?? "image"}`;
   if (n.type === "model") return n.data.modelId.startsWith("kaskad/") ? "tool" : `model:${n.data.kind}`;
@@ -17,7 +17,7 @@ function iconFor(n: GraphNode): NodeKey {
   return n.type;
 }
 
-function label(n: GraphNode): string {
+export function nodeLabel(n: GraphNode): string {
   if (n.type === "prompt") return "Промт";
   if (n.type === "image") return n.data.kind === "video" ? "Видео" : n.data.kind === "audio" ? "Аудио" : "Фото";
   if (n.type === "model") return getModel(n.data.modelId)?.name ?? n.data.modelId;
@@ -61,9 +61,9 @@ export function Templates() {
                   {chain.map((n, i) => (
                     <Fragment key={n.id}>
                       {i > 0 && <ArrowRightIcon size={10} className="tpl-arrow" aria-hidden />}
-                      <span className="tpl-step" title={label(n)}>
+                      <span className="tpl-step" title={nodeLabel(n)}>
                         <NodeIcon node={iconFor(n)} dtype={outputHandle(n)} size={13} />
-                        <span>{label(n)}</span>
+                        <span>{nodeLabel(n)}</span>
                       </span>
                     </Fragment>
                   ))}

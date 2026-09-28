@@ -1056,3 +1056,15 @@ button.side-title:hover { color: var(--text-2); }
 .compare-media button { display: block; width: 100%; cursor: zoom-in; }
 .compare-text { padding: 12px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; max-height: 60vh; overflow: auto; align-self: start; }
 .compare-empty { color: var(--text-3); font-size: 12px; }
+
+/* ---------------------------------------------------------------- graph agent */
+
+.dialog.agent { width: min(640px, calc(100vw - 32px)); gap: 14px; }
+.agent-form, .agent-result { display: flex; flex-direction: column; gap: 12px; }
+.agent-input { font-size: 13.5px; line-height: 1.55; min-height: 96px; }
+.agent-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-examples .chip { text-align: left; white-space: normal; }
+.agent-note { margin-right: auto; align-self: center; font-size: 12px; color: var(--text-3); line-height: 1.4; }
+.agent-result .tpl-chain { flex-wrap: wrap; }
+.agent-price { font-size: 13px; font-weight: 600; }
+.agent-fixes { font-size: 12px; color: var(--warn); line-height: 1.45; }

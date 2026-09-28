@@ -11,6 +11,7 @@ import { formatKop, formatRub, priceTitle, toKop } from "@/lib/money";
 import { getModel, isBlocked, TOOL_PREFIX } from "@/lib/models/registry";
 import type { MediaKind, ParamValue } from "@/lib/models/types";
 import { isActive, useStudio, type ModelNodeT } from "../store";
+import { CompareMenu } from "../Compare";
 import { NodeShell } from "./NodeShell";
 import { ParamField } from "./ParamField";
 import { ResultView } from "./ResultView";
@@ -144,6 +145,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       dtype={data.kind}
       selected={selected}
       busy={busy}
+      actions={isTool ? undefined : <CompareMenu nodeId={id} modelId={data.modelId} />}
       phase={job?.status === "running" ? "running" : job?.status === "queued" || submitting ? "queued" : null}
       wide
       footer={footer}

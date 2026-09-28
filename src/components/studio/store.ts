@@ -61,6 +61,8 @@ export interface StudioStore {
   blockedVendors: string[];
   account: Account | null;
   billingOpen: boolean;
+  /** nodes shown side by side in the compare view; empty = closed */
+  compareIds: string[];
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -84,7 +86,9 @@ export interface StudioStore {
   groupSelection(): void;
   /** Drop a template next to the existing graph; returns the new node ids */
   insertTemplate(t: Template): string[];
-  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean; billingOpen?: boolean }): void;
+  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean; billingOpen?: boolean; compareIds?: string[] }): void;
+  /** Copies of a model node with other models on the same inputs, stacked under it; returns all ids */
+  compareWith(nodeId: string, modelIds: string[]): string[];
   refreshBalance(): Promise<void>;
   updateData<T extends StudioNode>(id: string, patch: Partial<T["data"]>): void;
   setModel(id: string, modelId: string): void;
@@ -293,6 +297,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   templatesOpen: false,
   account: null,
   billingOpen: false,
+  compareIds: [],
   blockedVendors: [],
 
   setPanel(p) {
@@ -462,6 +467,37 @@ export const useStudio = create<StudioStore>((set, get) => ({
     // pasting again cascades instead of stacking on the same spot
     clipboard = { nodes, edges };
     scheduleSave();
+  },
+
+  compareWith(nodeId, modelIds) {
+    const src = get().nodes.find((n) => n.id === nodeId);
+    if (!src || src.type !== "model") return [];
+    const inbound = get().edges.filter((e) => e.target === nodeId);
+    const created: StudioNode[] = [];
+    const edges: Edge[] = [];
+    let y = src.position.y + (src.measured?.height ?? 420) + 40;
+    for (const modelId of modelIds) {
+      const spec = getModel(modelId);
+      if (!spec) continue;
+      const id = newId("n");
+      const position = freeSpot([...get().nodes, ...created], { x: src.position.x, y });
+      created.push(present({
+        id, type: "model", position, selected: true,
+        data: { kind: spec.kind, modelId, prompt: src.data.prompt, params: reconcileParams(spec, src.data.params) },
+      } as StudioNode));
+      y = position.y + 460;
+      // same inputs, where the other model has a port for them
+      for (const e of inbound) {
+        if (!spec.inputs.some((p) => p.key === e.targetHandle)) continue;
+        edges.push({ ...e, id: newId("e"), target: id });
+      }
+    }
+    set((s) => ({
+      nodes: [...s.nodes.map((n) => ({ ...n, selected: n.id === nodeId })), ...created],
+      edges: [...s.edges, ...edges],
+    }));
+    scheduleSave();
+    return [nodeId, ...created.map((n) => n.id)];
   },
 
   duplicateSelection() {

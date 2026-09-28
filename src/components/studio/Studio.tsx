@@ -10,6 +10,7 @@ import type { ProjectSummary } from "@/lib/projects";
 import { formatKop } from "@/lib/money";
 import { Billing } from "./Billing";
 import { Canvas } from "./Canvas";
+import { CompareView, SelectionBar } from "./Compare";
 import { Gallery } from "./Gallery";
 import { Templates } from "./Templates";
 import { useTheme } from "./theme";
@@ -70,13 +71,14 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
         <TopBar graphId={graphId} graphName={graphName} projects={projects} providerMode={providerMode} />
         <div className="workspace">
           <Sidebar />
-          <main className="canvas">{ready ? <Canvas /> : null}</main>
+          <main className="canvas">{ready ? <><Canvas /><SelectionBar /></> : null}</main>
           <Gallery />
         </div>
       </div>
       <Shortcuts />
       <Templates />
       <Billing />
+      <CompareView />
       <Toasts />
       <ConfirmDialog />
       <Lightbox />

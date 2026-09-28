@@ -37,6 +37,8 @@ export const jobs = pgTable("jobs", {
   runId: uuid("run_id").notNull().references(() => runs.id, { onDelete: "cascade" }),
   graphId: text("graph_id").notNull().references(() => graphs.id, { onDelete: "cascade" }),
   nodeId: text("node_id").notNull(),
+  /** position in a batch run (list item); null for a single run */
+  item: integer("item"),
   /** who pays; null only for jobs created before accounts existed */
   userId: uuid("user_id"),
   /** kopecks reserved from the balance when the job was queued */

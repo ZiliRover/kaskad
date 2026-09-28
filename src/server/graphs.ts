@@ -147,8 +147,15 @@ export async function saveGraph(id: string, doc: GraphDoc) {
 
 interface StateRow extends Record<string, unknown> {
   node_id: string;
-  job_id: string | null;
-  status: JobStatus | null;
+  first_id: string | null;
+  first_status: JobStatus | null;
+  total: number | null;
+  done: number | null;
+  bad: number | null;
+  running: number | null;
+  queued: number | null;
+  canceled: number | null;
+  fanned: boolean | null;
   error: string | null;
   cost_usd: string | null;
   charged_kop: string | null;
@@ -156,6 +163,7 @@ interface StateRow extends Record<string, unknown> {
   params: Record<string, unknown> | null;
   job_created: Date | null;
   started_at: Date | null;
+  active_ids: string[] | null;
   output_id: string | null;
   kind: "text" | "image" | "video" | null;
   file_key: string | null;
@@ -168,53 +176,93 @@ interface StateRow extends Record<string, unknown> {
 
 const iso = (d: Date | string | null) => (d ? new Date(d).toISOString() : null);
 
-/** Latest job and latest result for every node that has ever run. */
+/** One status for a node's latest run, which may be a batch of jobs. */
+function runStatus(r: StateRow): JobStatus {
+  if (r.running) return "running";
+  if (r.queued) return "queued";
+  if (r.done) return "succeeded";
+  if (r.canceled && !r.bad) return "canceled";
+  return r.first_status ?? "failed";
+}
+
+/** Latest run and latest result for every node that has ever run. A batch run is summed up. */
 export async function graphState(graphId: string): Promise<GraphState> {
   const rows = await db.execute<StateRow>(sql`
-    with lj as (
-      select distinct on (node_id) node_id, id, status, error, cost_usd, created_at, started_at,
-             model_id, input->'params' as params
+    with lr as (
+      select distinct on (node_id) node_id, run_id
       from jobs where graph_id = ${graphId}
       order by node_id, created_at desc
+    ), agg as (
+      select j.node_id,
+             (array_agg(j.id order by j.item nulls first, j.created_at))[1] as first_id,
+             (array_agg(j.status order by j.item nulls first, j.created_at))[1] as first_status,
+             count(*)::int as total,
+             count(*) filter (where j.status = 'succeeded')::int as done,
+             count(*) filter (where j.status in ('failed', 'skipped'))::int as bad,
+             count(*) filter (where j.status = 'running')::int as running,
+             count(*) filter (where j.status = 'queued')::int as queued,
+             count(*) filter (where j.status = 'canceled')::int as canceled,
+             bool_or(j.item is not null) as fanned,
+             (array_agg(j.error order by j.item nulls first) filter (where j.error is not null))[1] as error,
+             sum(j.cost_usd) as cost_usd,
+             (array_agg(j.model_id))[1] as model_id,
+             (array_agg(j.input->'params'))[1] as params,
+             max(j.created_at) as job_created,
+             min(j.started_at) as started_at,
+             coalesce(array_agg(j.id) filter (where j.status in ('queued', 'running')), '{}') as active_ids,
+             (select -sum(l.amount_kop) from ledger l
+               where l.kind = 'charge' and l.job_id = any(array_agg(j.id))) as charged_kop
+      from jobs j join lr on lr.node_id = j.node_id and lr.run_id = j.run_id
+      where j.graph_id = ${graphId}
+      group by j.node_id
     ), lo as (
       select distinct on (node_id) node_id, id, kind, file_key, mime, text, created_at
       from outputs where graph_id = ${graphId}
       order by node_id, created_at desc
     ), oc as (
       select node_id, count(*)::int as n from outputs where graph_id = ${graphId} group by node_id
-    ), lsj as (
-      select distinct on (node_id) node_id, id
+    ), lsr as (
+      -- the latest run that produced something: its results are the node's current batch
+      select distinct on (node_id) node_id, run_id
       from jobs where graph_id = ${graphId} and status = 'succeeded'
       order by node_id, created_at desc
     ), b as (
-      select o.node_id, json_agg(json_build_object('id', o.id, 'file_key', o.file_key) order by o.created_at, o.id) as batch
-      from outputs o join lsj on lsj.id = o.job_id
-      group by o.node_id having count(*) > 1
+      select j.node_id,
+             json_agg(json_build_object('id', o.id, 'file_key', o.file_key) order by j.item nulls first, o.created_at, o.id) as batch
+      from outputs o
+      join jobs j on j.id = o.job_id
+      join lsr on lsr.node_id = j.node_id and lsr.run_id = j.run_id
+      where j.status = 'succeeded'
+      group by j.node_id having count(*) > 1
     )
-    select coalesce(lj.node_id, lo.node_id) as node_id,
-           lj.id as job_id, lj.status, lj.error, lj.cost_usd, lj.created_at as job_created, lj.started_at,
-           lj.model_id, lj.params,
-           (select -l.amount_kop from ledger l where l.job_id = lj.id and l.kind = 'charge') as charged_kop,
+    select coalesce(agg.node_id, lo.node_id) as node_id,
+           agg.first_id, agg.first_status, agg.total, agg.done, agg.bad, agg.running, agg.queued, agg.canceled,
+           agg.fanned, agg.error, agg.cost_usd, agg.charged_kop, agg.model_id, agg.params,
+           agg.job_created, agg.started_at, agg.active_ids,
            lo.id as output_id, lo.kind, lo.file_key, lo.mime, lo.text, lo.created_at as output_created,
            coalesce(oc.n, 0) as output_count, b.batch
-    from lj full outer join lo on lo.node_id = lj.node_id
-    left join oc on oc.node_id = coalesce(lj.node_id, lo.node_id)
-    left join b on b.node_id = coalesce(lj.node_id, lo.node_id)
+    from agg full outer join lo on lo.node_id = agg.node_id
+    left join oc on oc.node_id = coalesce(agg.node_id, lo.node_id)
+    left join b on b.node_id = coalesce(agg.node_id, lo.node_id)
   `);
 
   const state: GraphState = {};
   for (const r of rows) {
+    const status = r.first_id ? runStatus(r) : null;
     const s: NodeState = {
-      job: r.job_id ? {
-        id: r.job_id,
-        status: r.status!,
-        error: r.error,
+      job: r.first_id && status ? {
+        id: r.first_id,
+        status,
+        // a batch that partly failed still shows why
+        error: status === "succeeded" && !r.bad ? null : r.error,
         costUsd: r.cost_usd === null ? null : Number(r.cost_usd),
         chargedKop: r.charged_kop === null ? null : Number(r.charged_kop),
         modelId: r.model_id ?? "",
         params: r.params ?? {},
         createdAt: iso(r.job_created)!,
         startedAt: iso(r.started_at),
+        activeIds: r.active_ids ?? [],
+        items: r.fanned ? { total: r.total ?? 0, done: r.done ?? 0, failed: r.bad ?? 0 } : null,
       } : null,
       output: r.output_id ? {
         id: r.output_id,

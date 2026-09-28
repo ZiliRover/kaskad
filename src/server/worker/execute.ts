@@ -1,7 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
 import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
-import { db, outputs, type JobRow } from "../db";
+import { db, jobs, outputs, type JobRow } from "../db";
 import { getProvider, providerMode, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
 import { addAudio, caption, concatVideos, extractFrame, reframe, speedVideo, trimVideo, type CaptionStyle } from "../tools";
@@ -31,6 +31,15 @@ async function nodeOutput(graphId: string, ref: Extract<InputRef, { type: "node"
     const [picked] = await db.select().from(outputs)
       .where(and(eq(outputs.id, ref.outputId), eq(outputs.graphId, graphId), eq(outputs.nodeId, ref.nodeId)));
     if (picked) return picked;
+  }
+  if (ref.item !== undefined) {
+    // a batch: the result of that node's latest successful run of the same item
+    const [o] = await db.select({ o: outputs }).from(outputs)
+      .innerJoin(jobs, eq(jobs.id, outputs.jobId))
+      .where(and(eq(jobs.graphId, graphId), eq(jobs.nodeId, ref.nodeId), eq(jobs.item, ref.item), eq(jobs.status, "succeeded")))
+      .orderBy(desc(jobs.createdAt), asc(outputs.createdAt)).limit(1);
+    if (!o) throw new InputError(`Входная нода ещё не дала результата для элемента ${ref.item + 1}`);
+    return o.o;
   }
   const [o] = await db.select().from(outputs)
     .where(and(eq(outputs.graphId, graphId), eq(outputs.nodeId, ref.nodeId)))

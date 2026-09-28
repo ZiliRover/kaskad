@@ -53,13 +53,20 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
       : <div className="result skeleton" style={aspectStyle(aspect)} />;
   }
 
-  const find = (id: string | null | undefined): Shown | undefined =>
-    !id ? undefined : id === latest.id ? latest : versions?.find((v) => v.id === id);
+  const batch = node?.batch ?? [];
+  // a batch run (list): its results are the items, one per input, nothing to pick
+  const fanned = !!node?.job?.items;
+  const find = (id: string | null | undefined): Shown | undefined => {
+    if (!id) return undefined;
+    if (id === latest.id) return latest;
+    const b = batch.find((x) => x.id === id);
+    if (b) return { id: b.id, url: b.url, kind: latest.kind, text: null };
+    return versions?.find((v) => v.id === id);
+  };
   const selectedId = find(pinnedId) ? pinnedId! : latest.id;
-  const out: Shown = find(viewId) ?? find(selectedId) ?? latest;
+  const out: Shown = find(viewId) ?? (fanned ? find(batch[0]?.id) : undefined) ?? find(selectedId) ?? latest;
   const list = versions ?? [];
   const index = Math.max(0, list.findIndex((v) => v.id === out.id));
-  const batch = node?.batch ?? [];
 
   const choose = (id: string) => { pin(nodeId, id === latest.id ? null : id); setViewId(null); };
 
@@ -78,19 +85,26 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
       {out.kind === "text" && <div className="result-text nodrag nowheel">{out.text}</div>}
 
       {batch.length > 1 && (
-        <div className="batch nodrag" role="listbox" aria-label="Варианты последнего запуска" style={{ gridTemplateColumns: `repeat(${batch.length}, 1fr)` }}>
+        <div
+          className={`batch nodrag nowheel${batch.length > 5 ? " is-many" : ""}`} role="listbox"
+          aria-label={fanned ? "Результаты по элементам списка" : "Варианты последнего запуска"}
+          style={{ gridTemplateColumns: `repeat(${Math.min(batch.length, 5)}, 1fr)` }}
+        >
           {batch.map((b, i) => (
             <button
               key={b.id}
               type="button"
               role="option"
-              aria-selected={b.id === selectedId}
-              className={`batch-item${b.id === selectedId ? " is-selected" : ""}${b.id === out.id ? " is-viewed" : ""}`}
-              onClick={() => choose(b.id)}
-              title={`Вариант ${i + 1}: передавать дальше`}
+              aria-selected={fanned ? b.id === out.id : b.id === selectedId}
+              className={`batch-item${!fanned && b.id === selectedId ? " is-selected" : ""}${b.id === out.id ? " is-viewed" : ""}`}
+              onClick={() => (fanned ? setViewId(b.id) : choose(b.id))}
+              title={fanned ? `Элемент ${i + 1}` : `Вариант ${i + 1}: передавать дальше`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {b.url && <img src={b.url} alt={`Вариант ${i + 1}`} />}
+              {b.url && latest.kind === "video"
+                ? <video src={`${b.url}#t=0.1`} muted preload="metadata" />
+                // eslint-disable-next-line @next/next/no-img-element
+                : b.url && <img src={b.url} alt={`${fanned ? "Элемент" : "Вариант"} ${i + 1}`} />}
+              {fanned && <span className="batch-num">{i + 1}</span>}
             </button>
           ))}
         </div>
@@ -108,7 +122,7 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
             </button>
           </div>
         )}
-        {total > 1 && (out.id === selectedId ? (
+        {total > 1 && !fanned && (out.id === selectedId ? (
           <span className="flows" title="Эта версия уходит в следующие ноды"><CheckIcon size={11} weight="bold" aria-hidden />идёт дальше</span>
         ) : (
           <button type="button" className="link-btn nodrag pin-btn" onClick={() => choose(out.id)}>

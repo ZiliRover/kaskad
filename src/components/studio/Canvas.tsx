@@ -13,11 +13,12 @@ import { useTheme } from "./theme";
 import { mediaFiles } from "./upload";
 import { GroupNode } from "./nodes/GroupNode";
 import { ImageNode } from "./nodes/ImageNode";
+import { ListNode } from "./nodes/ListNode";
 import { ModelNode } from "./nodes/ModelNode";
 import { NoteNode } from "./nodes/NoteNode";
 import { PromptNode } from "./nodes/PromptNode";
 
-const nodeTypes: NodeTypes = { prompt: PromptNode, image: ImageNode, model: ModelNode, note: NoteNode, group: GroupNode };
+const nodeTypes: NodeTypes = { prompt: PromptNode, image: ImageNode, model: ModelNode, note: NoteNode, group: GroupNode, list: ListNode };
 const edgeTypes: EdgeTypes = { default: FlowEdge };
 
 export const PALETTE_MIME = "application/x-kaskad-node";
@@ -29,6 +30,8 @@ export interface PalettePayload {
   fileKey?: string;
   fileKind?: "image" | "video" | "audio";
   text?: string;
+  /** list node: prompts or files */
+  listKind?: "text" | "image";
 }
 
 /**
@@ -91,7 +94,7 @@ export function Canvas() {
         toast(`Модель заменена на ${getModel(p.modelId)?.name}`);
         return;
       }
-      const id = addNode(p.type, { x: at.x - 40, y: at.y - 20 }, { kind: p.kind, modelId: p.modelId, exact: true });
+      const id = addNode(p.type, { x: at.x - 40, y: at.y - 20 }, { kind: p.kind, modelId: p.modelId, listKind: p.listKind, exact: true });
       if (p.fileKey && p.fileKind) setUpload(id, { fileKey: p.fileKey, name: "из галереи", kind: p.fileKind });
       if (p.type === "prompt" && p.text) updateData(id, { text: p.text });
       return;

@@ -25,6 +25,17 @@ export const modelData = z.object({
   pinnedOutputId: z.string().uuid().optional(),
 });
 
+/**
+ * A batch: several prompts (one per line) or several files. A model fed by a list
+ * runs once per item, and everything downstream follows item by item.
+ */
+export const LIST_MAX = 50;
+export const listData = z.object({
+  kind: z.enum(["text", "image", "video", "audio"]),
+  text: z.string().max(40000).optional(),
+  files: z.array(z.string().max(300)).max(LIST_MAX).optional(),
+});
+
 /** Canvas annotations: no inputs or outputs, never executed. */
 export const NOTE_COLORS = ["yellow", "blue", "pink", "green", "gray"] as const;
 export const noteData = z.object({
@@ -44,6 +55,7 @@ export const graphNode = z.discriminatedUnion("type", [
   z.object({ id, type: z.literal("prompt"), position, data: promptData }),
   z.object({ id, type: z.literal("image"), position, data: imageData }),
   z.object({ id, type: z.literal("model"), position, data: modelData }),
+  z.object({ id, type: z.literal("list"), position, data: listData }),
   z.object({ id, type: z.literal("note"), position, data: noteData }),
   z.object({ id, type: z.literal("group"), position, data: groupData }),
 ]);
@@ -65,6 +77,7 @@ export const graphDoc = z.object({
 export type PromptData = z.infer<typeof promptData>;
 export type ImageData = z.infer<typeof imageData>;
 export type ModelData = z.infer<typeof modelData>;
+export type ListData = z.infer<typeof listData>;
 export type NoteData = z.infer<typeof noteData>;
 export type GroupData = z.infer<typeof groupData>;
 export type GraphNode = z.infer<typeof graphNode>;
@@ -78,5 +91,14 @@ export function outputHandle(node: GraphNode): DType | null {
   if (node.type === "prompt") return "text";
   if (node.type === "image") return node.data.kind ?? "image";
   if (node.type === "model") return node.data.kind;
+  if (node.type === "list") return node.data.kind;
   return null;
+}
+
+/** The items of a list node: non-empty lines, or uploaded files. */
+export function listItems(data: ListData): string[] {
+  const items = data.kind === "text"
+    ? (data.text ?? "").split("\n").map((l) => l.trim()).filter(Boolean)
+    : (data.files ?? []);
+  return items.slice(0, LIST_MAX);
 }

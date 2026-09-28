@@ -13,6 +13,7 @@ function iconFor(n: GraphNode): NodeKey {
   if (n.type === "prompt") return "prompt";
   if (n.type === "image") return `upload:${n.data.kind ?? "image"}`;
   if (n.type === "model") return n.data.modelId.startsWith("kaskad/") ? "tool" : `model:${n.data.kind}`;
+  if (n.type === "list") return "list";
   return n.type;
 }
 
@@ -20,6 +21,7 @@ function label(n: GraphNode): string {
   if (n.type === "prompt") return "Промт";
   if (n.type === "image") return n.data.kind === "video" ? "Видео" : n.data.kind === "audio" ? "Аудио" : "Фото";
   if (n.type === "model") return getModel(n.data.modelId)?.name ?? n.data.modelId;
+  if (n.type === "list") return "Список";
   return "";
 }
 

@@ -4,6 +4,8 @@ import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflo
 import { PlusIcon, StopIcon } from "@phosphor-icons/react";
 import { memo, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { fanOut } from "@/lib/graph/plan";
+import type { GraphDoc } from "@/lib/graph/types";
 import { estimate } from "@/lib/models/pricing";
 import { formatKop, formatRub, priceTitle, toKop } from "@/lib/money";
 import { getModel, isBlocked, TOOL_PREFIX } from "@/lib/models/registry";
@@ -55,6 +57,8 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       return sum + (src?.type === "prompt" ? src.data.text.length : 400);
     }, 0));
 
+  // fed by a list: runs once per item
+  const fan = useStudio((s) => fanOut({ nodes: s.nodes as unknown as GraphDoc["nodes"], edges: s.edges as GraphDoc["edges"] }).get(id) ?? 0);
   const busy = active || submitting;
   const job = node?.job;
   const elapsed = useElapsed(job?.startedAt, job?.status === "running");
@@ -80,10 +84,15 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
   let status: { text: string; tone?: "error" | "ok" } | null = null;
   if (localError) status = { text: localError, tone: "error" };
   else if (submitting) status = { text: "Отправляю…" };
-  else if (job?.status === "queued") status = { text: "В очереди" };
+  else if (job?.status === "queued") status = { text: job.items ? `В очереди: ${job.items.total} шт.` : "В очереди" };
   else if (job?.status === "running") {
     const verb = isTool ? "Обработка" : "Генерация";
-    status = { text: elapsed ? `${verb} ${elapsed}` : `${verb}…` };
+    status = job.items
+      ? { text: `${verb}: готово ${job.items.done} из ${job.items.total}` }
+      : { text: elapsed ? `${verb} ${elapsed}` : `${verb}…` };
+  }
+  else if (job?.status === "succeeded" && job.items && job.items.done < job.items.total) {
+    status = { text: `Готово ${job.items.done} из ${job.items.total}. ${job.error ?? ""}`.trim(), tone: "error" };
   }
   else if (job?.status === "failed" || job?.status === "skipped") status = { text: job.error ?? "Ошибка", tone: "error" };
   else if (job?.status === "canceled") status = { text: "Остановлено" };
@@ -118,7 +127,9 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       ) : showFinal ? (
         <span className="node-price is-final" title="Итоговая стоимость последнего запуска">{formatKop(finalKop!)}</span>
       ) : est && est.usd !== null && (
-        <span className="node-price" title={`Оценка запуска: ${priceTitle(est.usd, fx)}`}>{est.approx ? "≈ " : ""}{formatRub(est.usd, fx)}</span>
+        <span className="node-price" title={fan ? `${fan} запусков по ${formatRub(est.usd, fx)}. ${priceTitle(est.usd * fan, fx)}` : `Оценка запуска: ${priceTitle(est.usd, fx)}`}>
+          {fan ? <span className="node-fan">×{fan}</span> : null}{est.approx ? "≈ " : ""}{formatRub(est.usd * (fan || 1), fx)}
+        </span>
       )}
     </div>
   );

@@ -80,7 +80,7 @@ function SimpleItem({ node, title, desc, payload, onAdd }: {
       type="button" className="palette-item" draggable
       onDragStart={(e) => startDrag(e, payload)} onDragEnd={endDrag} onClick={() => onAdd(payload)}
     >
-      <NodeIcon node={node} dtype={node === "prompt" ? "text" : node === "upload" ? "image" : null} />
+      <NodeIcon node={node} dtype={node === "prompt" || node === "list" ? "text" : node === "upload" ? "image" : null} />
       <span className="pi-text"><span className="pi-title">{title}</span><span className="pi-desc">{desc}</span></span>
     </button>
   );
@@ -128,7 +128,7 @@ export function Sidebar() {
   const addAtCenter = (p: PalettePayload) => {
     const r = document.querySelector(".react-flow")?.getBoundingClientRect();
     const at = r ? screenToFlowPosition({ x: r.left + r.width / 2 - 160, y: r.top + r.height / 3 }) : { x: 0, y: 0 };
-    addNode(p.type, { x: Math.round(at.x), y: Math.round(at.y) }, { kind: p.kind, modelId: p.modelId }); // store nudges to free space
+    addNode(p.type, { x: Math.round(at.x), y: Math.round(at.y) }, { kind: p.kind, modelId: p.modelId, listKind: p.listKind }); // store nudges to free space
   };
 
   // price of a default run: lets people compare models before picking one
@@ -171,6 +171,8 @@ export function Sidebar() {
           <Section id="inputs" title="Входные данные" icon={null} open={open.includes("inputs")} onToggle={toggle}>
             <SimpleItem node="prompt" title="Промт" desc="Текст для моделей" payload={{ type: "prompt" }} onAdd={addAtCenter} />
             <SimpleItem node="upload" title="Файл" desc="Картинка, видео или аудио" payload={{ type: "image" }} onAdd={addAtCenter} />
+            <SimpleItem node="list" title="Список промтов" desc="Пакетный запуск: модель сработает на каждую строку" payload={{ type: "list", listKind: "text" }} onAdd={addAtCenter} />
+            <SimpleItem node="list" title="Список файлов" desc="Пакетный запуск: по разу на каждый файл" payload={{ type: "list", listKind: "image" }} onAdd={addAtCenter} />
           </Section>
         )}
 

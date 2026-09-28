@@ -15,6 +15,7 @@ function toJob(r: RawJob): JobRow {
     runId: r.run_id as string,
     graphId: r.graph_id as string,
     nodeId: r.node_id as string,
+    item: r.item === null || r.item === undefined ? null : Number(r.item),
     userId: (r.user_id as string | null) ?? null,
     holdKop: Number(r.hold_kop ?? 0),
     kind: r.kind as JobRow["kind"],

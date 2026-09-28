@@ -4,7 +4,8 @@ import type { ParamValue } from "./models/types";
 export type InputRef =
   | { type: "text"; text: string }
   | { type: "file"; key: string }
-  | { type: "node"; nodeId: string; outputId?: string };
+  /** item: the result of that node's run for list item N (batches go item by item) */
+  | { type: "node"; nodeId: string; outputId?: string; item?: number };
 
 export interface JobInput {
   ports: Record<string, InputRef[]>;
@@ -29,6 +30,10 @@ export interface NodeState {
     params: Record<string, unknown>;
     createdAt: string;
     startedAt: string | null;
+    /** all jobs of the latest run still queued or running (a batch has several) */
+    activeIds: string[];
+    /** batch progress; null for a single run */
+    items: { total: number; done: number; failed: number } | null;
   } | null;
   output: {
     id: string;

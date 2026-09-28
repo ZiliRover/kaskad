@@ -27,8 +27,12 @@ export async function createRun(
 ): Promise<CreateRunResult> {
   // a document may only feed the worker files its author can read
   for (const n of doc.nodes) {
-    if (n.type === "image" && n.data.fileKey && !(await canReadFile(n.data.fileKey, userId))) {
-      return { ok: false, nodeId: n.id, error: "Файл недоступен. Загрузите его заново." };
+    const keys = n.type === "image" && n.data.fileKey ? [n.data.fileKey]
+      : n.type === "list" && n.data.kind !== "text" ? n.data.files ?? [] : [];
+    for (const key of keys) {
+      if (!(await canReadFile(key, userId))) {
+        return { ok: false, nodeId: n.id, error: "Файл недоступен. Загрузите его заново." };
+      }
     }
   }
   await saveGraph(graphId, doc);
@@ -43,7 +47,8 @@ export async function createRun(
     );
     const active = await tx.select({ id: jobs.id, nodeId: jobs.nodeId }).from(jobs)
       .where(and(eq(jobs.graphId, graphId), inArray(jobs.status, ACTIVE_STATUSES)));
-    const activeByNode = new Map(active.map((j) => [j.nodeId, j.id]));
+    const activeByNode = new Map<string, string[]>();
+    for (const j of active) activeByNode.set(j.nodeId, [...(activeByNode.get(j.nodeId) ?? []), j.id]);
 
     // a node that is already generating is not started twice
     const plan = planRun({
@@ -82,14 +87,20 @@ export async function createRun(
       .values({ graphId, estimateUsd: String(plan.totalUsd) })
       .returning({ id: runs.id });
 
-    const jobIdByNode = new Map(activeByNode);
+    // job ids per node (all items) and per node item; already active jobs count as upstream too
+    const idsByNode = new Map(activeByNode);
+    const idByItem = new Map<string, string>();
     for (const [i, pj] of plan.jobs.entries()) {
       // plan order is dependency order, so every upstream job id is known here
-      const dependsOn = pj.waitsFor.map((n) => jobIdByNode.get(n)).filter((x): x is string => !!x);
+      const dependsOn = [...new Set(pj.waitsFor.flatMap((w) => {
+        const one = w.item !== undefined ? idByItem.get(`${w.nodeId}#${w.item}`) : undefined;
+        return one ? [one] : idsByNode.get(w.nodeId) ?? [];
+      }))];
       const [row] = await tx.insert(jobs).values({
         runId: run.id,
         graphId,
         nodeId: pj.nodeId,
+        item: pj.item ?? null,
         userId,
         holdKop: holds[i],
         kind: pj.kind,
@@ -99,7 +110,8 @@ export async function createRun(
         estimateUsd: pj.estimate.usd === null ? null : String(pj.estimate.usd),
       }).returning({ id: jobs.id });
       await addHold(tx, userId, row.id, holds[i]);
-      jobIdByNode.set(pj.nodeId, row.id);
+      idsByNode.set(pj.nodeId, [...(idsByNode.get(pj.nodeId) ?? []).filter((id) => !active.some((a) => a.id === id)), row.id]);
+      if (pj.item !== undefined) idByItem.set(`${pj.nodeId}#${pj.item}`, row.id);
     }
 
     return { ok: true as const, runId: run.id, jobCount: plan.jobs.length, totalUsd: plan.totalUsd, holdKop: need };

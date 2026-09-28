@@ -5,7 +5,7 @@ import {
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange, type Viewport,
 } from "@xyflow/react";
 import { create } from "zustand";
-import type { GraphDoc, GroupData, ImageData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
+import type { GraphDoc, GroupData, ImageData, ListData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { liftInlinePrompts } from "@/lib/graph/lift";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
@@ -19,8 +19,9 @@ export type PromptNodeT = Node<PromptData, "prompt">;
 export type ImageNodeT = Node<ImageData, "image">;
 export type ModelNodeT = Node<ModelData, "model">;
 export type NoteNodeT = Node<NoteData, "note">;
+export type ListNodeT = Node<ListData, "list">;
 export type GroupNodeT = Node<GroupData, "group">;
-export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT;
+export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT | ListNodeT;
 
 export interface Toast { id: number; text: string; error?: boolean; action?: { label: string; run: () => void } }
 export interface Account {
@@ -67,7 +68,7 @@ export interface StudioStore {
   onConnect(c: Connection): void;
   setViewport(v: Viewport): void;
   /** Adds a node and returns its id. exact: keep the position (drop at cursor); otherwise nudge to free space */
-  addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean }): string;
+  addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean; listKind?: ListData["kind"] }): string;
   /** Create a Prompt node left of a model node and wire it into its prompt input */
   addPromptFor(nodeId: string): void;
   /** Upload files and place one upload node per file, fanned out from `at` */
@@ -138,6 +139,7 @@ export function isActive(state: GraphState, nodeId: string): boolean {
 export function outputType(n: StudioNode): DType | null {
   if (n.type === "prompt") return "text";
   if (n.type === "image") return n.data.kind ?? "image";
+  if (n.type === "list") return n.data.kind;
   if (n.type === "model") return n.data.kind;
   return null;
 }
@@ -380,6 +382,11 @@ export const useStudio = create<StudioStore>((set, get) => ({
     else if (type === "image") node = { id, type, position, data: { fileKey: null, name: "", kind: "image" } };
     else if (type === "note") node = { id, type, position, data: { text: "", color: "yellow" } };
     else if (type === "group") node = { id, type, position, data: { title: "Группа", width: 720, height: 420 } };
+    else if (type === "list") {
+      node = opts.listKind && opts.listKind !== "text"
+        ? { id, type, position, data: { kind: opts.listKind, files: [] } }
+        : { id, type, position, data: { kind: "text", text: "" } };
+    }
     else {
       const spec = (opts.modelId && getModel(opts.modelId)) || defaultModel(opts.kind ?? "image", get().blockedVendors);
       node = { id, type: "model", position, data: { kind: spec.kind, modelId: spec.id, prompt: "", params: defaultParams(spec) } };
@@ -575,9 +582,11 @@ export const useStudio = create<StudioStore>((set, get) => ({
       if (!ok) return;
     }
     try {
-      const r = await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
-      if (authLost(r)) return;
-      if (!r.ok && r.status !== 409) throw new Error();
+      // a batch stops as a whole
+      const ids = job.activeIds.length ? job.activeIds : [job.id];
+      const rs = await Promise.all(ids.map((jid) => fetch(`/api/jobs/${jid}/cancel`, { method: "POST" })));
+      if (rs.some(authLost)) return;
+      if (rs.some((r) => !r.ok && r.status !== 409)) throw new Error();
     } catch {
       get().toast("Не удалось отменить. Проверьте соединение.", true);
     }

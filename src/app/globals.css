@@ -980,3 +980,43 @@ button.side-title:hover { color: var(--text-2); }
 .projects-list li:hover .projects-actions, .projects-list li:focus-within .projects-actions { display: flex; }
 .menu .projects-actions .icon-btn { width: 24px; height: 24px; padding: 0; justify-content: center; }
 .projects-rename { margin: 3px; height: 32px; }
+
+/* ---------------------------------------------------------------- list (batch) node */
+
+.list-text { min-height: 140px; font-size: 12.5px; line-height: 1.55; }
+.list-hint { font-size: 11px; color: var(--text-3); line-height: 1.4; }
+.list-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  max-height: 260px; overflow-y: auto; scrollbar-width: thin;
+  padding: 2px; border-radius: var(--r-ctl); outline: 1.5px dashed transparent; outline-offset: 2px;
+  transition: outline-color .12s;
+}
+.list-grid.is-over { outline-color: var(--accent-line); }
+.list-cell { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--media-bg); }
+.list-cell img, .list-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.list-audio { display: grid; place-items: center; height: 100%; color: var(--t-audio); font-weight: 650; }
+.list-index {
+  position: absolute; left: 4px; bottom: 4px; min-width: 16px; padding: 0 4px; border-radius: 4px;
+  background: var(--overlay-strong); color: #fff; font-size: 10px; font-weight: 650; text-align: center; line-height: 16px;
+}
+.list-remove {
+  position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%;
+  display: none; place-items: center; background: var(--overlay-strong); color: #fff;
+}
+.list-cell:hover .list-remove, .list-remove:focus-visible { display: grid; }
+.list-add {
+  aspect-ratio: 1; border-radius: 6px; border: 1.5px dashed var(--line-2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--text-3); font-size: 11px;
+}
+.list-add:hover:not(:disabled) { color: var(--accent-strong); border-color: var(--accent-line); }
+
+/* batch results: wraps into rows, numbered when they map to list items */
+.batch.is-many { max-height: 190px; overflow-y: auto; scrollbar-width: thin; }
+.batch-item { position: relative; }
+.batch-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.batch-num {
+  position: absolute; left: 3px; bottom: 3px; padding: 0 4px; border-radius: 4px;
+  background: var(--overlay-strong); color: #fff; font-size: 10px; font-weight: 650; line-height: 15px;
+}
+.node-fan { font-weight: 700; color: var(--accent-strong); margin-right: 5px; }

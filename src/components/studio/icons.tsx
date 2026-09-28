@@ -3,13 +3,13 @@
 import {
   ArrowsOutSimpleIcon, BezierCurveIcon, ChatCenteredTextIcon, FilmReelIcon, FilmStripIcon, FrameCornersIcon,
   ImageIcon, ImagesIcon, MagicWandIcon, NotePencilIcon, PaintBrushIcon, PencilSimpleIcon, ScissorsIcon,
-  SelectionIcon, SpeakerHighIcon, SquaresFourIcon, TextAaIcon, UploadSimpleIcon, WaveformIcon, type Icon,
+  ListBulletsIcon, SelectionIcon, SpeakerHighIcon, SquaresFourIcon, TextAaIcon, UploadSimpleIcon, WaveformIcon, type Icon,
 } from "@phosphor-icons/react";
 import type { DType, ModelCaps, ModelGroup } from "@/lib/models/types";
 
 /** One icon per node type, tinted with the color of the data it produces. */
 export type NodeKey =
-  | "prompt" | "upload" | "note" | "group" | "tool"
+  | "prompt" | "upload" | "note" | "group" | "tool" | "list"
   | `upload:${"image" | "video" | "audio"}` | `model:${"image" | "video" | "text"}`;
 
 const NODE_ICONS: Record<NodeKey, Icon> = {
@@ -24,6 +24,7 @@ const NODE_ICONS: Record<NodeKey, Icon> = {
   note: NotePencilIcon,
   group: SelectionIcon,
   tool: ScissorsIcon,
+  list: ListBulletsIcon,
 };
 
 export function NodeIcon({ node, dtype, size = 16 }: { node: NodeKey; dtype: DType | null; size?: number }) {

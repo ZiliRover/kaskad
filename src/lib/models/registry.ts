@@ -138,6 +138,33 @@ function splitName(raw: string): { vendor: string; name: string } {
   return i > 0 ? { vendor: raw.slice(0, i), name: raw.slice(i + 2) } : { vendor: "", name: raw };
 }
 
+/**
+ * Our own tools, executed by the worker with ffmpeg. They make long videos possible:
+ * last frame of clip A -> first frame of clip B -> join A and B.
+ */
+export const TOOL_PREFIX = "kaskad/";
+const TOOLS: ModelSpec[] = [
+  {
+    id: "kaskad/last-frame", kind: "image", group: "tools", name: "Кадр из видео", vendor: "Каскад",
+    blurb: "Последний кадр ролика: первый кадр следующей сцены", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [{ key: "video", dtype: "video", label: "Видео", max: 1, min: 1 }],
+    params: [{
+      key: "which", label: "Какой кадр", type: "enum", default: "last",
+      options: [{ value: "last", label: "Последний" }, { value: "first", label: "Первый" }],
+    }],
+    pricing: { type: "free" },
+  },
+  {
+    id: "kaskad/concat", kind: "video", group: "tools", name: "Склейка видео", vendor: "Каскад",
+    blurb: "Соединяет ролики в один, в порядке подключения", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [{ key: "clips", dtype: "video", label: "Ролики", max: 8, min: 2, hint: "по порядку подключения" }],
+    params: [],
+    pricing: { type: "free" },
+  },
+];
+
 const FEATURED_RANK = new Map(FEATURED.map((f, i) => [f.id, i]));
 
 export const MODELS: ModelSpec[] = ENTRIES
@@ -162,7 +189,8 @@ export const MODELS: ModelSpec[] = ENTRIES
     const ra = FEATURED_RANK.get(a.id) ?? 1e6, rb = FEATURED_RANK.get(b.id) ?? 1e6;
     if (ra !== rb) return ra - rb;
     return `${a.vendor} ${a.name}`.localeCompare(`${b.vendor} ${b.name}`, "ru");
-  });
+  })
+  .concat(TOOLS);
 
 const BY_ID = new Map(MODELS.map((m) => [m.id, m]));
 
@@ -176,7 +204,7 @@ export function modelsOfKind(kind: MediaKind): ModelSpec[] {
 
 /** Default model for a freshly added node of a kind. */
 export function defaultModel(kind: MediaKind): ModelSpec {
-  return modelsOfKind(kind).find((m) => m.group === kind || m.group === "text") ?? modelsOfKind(kind)[0];
+  return modelsOfKind(kind).find((m) => m.group === kind) ?? modelsOfKind(kind)[0];
 }
 
 export function defaultParams(spec: ModelSpec): Record<string, ParamValue> {

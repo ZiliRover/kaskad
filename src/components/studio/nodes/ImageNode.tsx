@@ -48,7 +48,7 @@ export const ImageNode = memo(function ImageNode({ id, data, selected }: NodePro
       ) : url ? (
         <div className={`drop has-image nodrag${over ? " is-over" : ""}`} {...dropProps}>
           {kind === "video"
-            ? <video className="drop-media" src={url} controls loop playsInline preload="metadata" />
+            ? <video className="drop-media" src={`${url}#t=0.1`} controls loop playsInline preload="metadata" />
             : <audio className="drop-audio" src={url} controls preload="metadata" />}
           <button type="button" className="drop-replace is-visible" onClick={() => input.current?.click()}>Заменить</button>
         </div>

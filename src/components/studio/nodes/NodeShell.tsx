@@ -10,6 +10,10 @@ import { useStudio } from "../store";
 interface Props {
   id: string;
   title: string;
+  /** small text after the title, e.g. model vendor */
+  subtitle?: string;
+  /** tooltip on the header */
+  hint?: string;
   icon: NodeKey;
   dtype: DType;
   selected?: boolean;
@@ -22,13 +26,16 @@ interface Props {
 }
 
 /** Common frame: draggable header with the output handle, body, optional footer. */
-export function NodeShell({ id, title, icon, dtype, selected, busy, wide, children, footer, actions }: Props) {
+export function NodeShell({ id, title, subtitle, hint, icon, dtype, selected, busy, wide, children, footer, actions }: Props) {
   const removeNode = useStudio((s) => s.removeNode);
   return (
     <div className={`node${wide ? " node-wide" : ""}${selected ? " is-selected" : ""}${busy ? " is-busy" : ""}`}>
-      <div className="node-head">
+      <div className="node-head" title={hint}>
         <NodeIcon node={icon} dtype={dtype} />
-        <span className="node-title">{title}</span>
+        <span className="node-title">
+          {title}
+          {subtitle && <span className="node-subtitle">{subtitle}</span>}
+        </span>
         {actions}
         <button
           type="button"

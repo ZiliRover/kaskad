@@ -7,6 +7,9 @@ import type { GraphDoc } from "@/lib/graph/types";
 import type { GraphState } from "@/lib/jobs";
 import type { Fx } from "@/lib/money";
 import { Canvas } from "./Canvas";
+import { Gallery } from "./Gallery";
+import { Templates } from "./Templates";
+import { useTheme } from "./theme";
 import { ConfirmDialog, Lightbox, Toasts } from "./Overlays";
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar } from "./Sidebar";
@@ -29,7 +32,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
     useStudio.getState().init(graphId, initialDoc, initialState, fx);
     setReady(true);
   }, [graphId, initialDoc, initialState, fx]);
-
+  useEffect(() => useTheme.getState().init(), []);
 
   return (
     <ReactFlowProvider>
@@ -38,9 +41,11 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
         <div className="workspace">
           <Sidebar />
           <main className="canvas">{ready ? <Canvas /> : null}</main>
+          <Gallery />
         </div>
       </div>
       <Shortcuts />
+      <Templates />
       <Toasts />
       <ConfirmDialog />
       <Lightbox />

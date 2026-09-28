@@ -33,10 +33,12 @@ export interface PricingLine {
 export type PricingSpec =
   | { type: "video"; skus: Record<string, string> }
   | { type: "image"; lines: PricingLine[] }
-  | { type: "text"; prompt: number; completion: number; image?: number };
+  | { type: "text"; prompt: number; completion: number; image?: number }
+  /** our own tools run on the server (ffmpeg): no provider bill */
+  | { type: "free" };
 
 /** Function groups for the model palette. */
-export type ModelGroup = "video" | "video-edit" | "image" | "image-style" | "image-vector" | "text";
+export type ModelGroup = "video" | "video-edit" | "image" | "image-style" | "image-vector" | "text" | "tools";
 
 /** Capability flags shown as icons in the palette and used for filtering. */
 export interface ModelCaps {

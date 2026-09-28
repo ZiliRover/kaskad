@@ -5,10 +5,11 @@ import {
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange, type Viewport,
 } from "@xyflow/react";
 import { create } from "zustand";
-import type { GraphDoc, ImageData, ModelData, PromptData } from "@/lib/graph/types";
+import type { GraphDoc, GroupData, ImageData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
 import { defaultModel, defaultParams, getModel, reconcileParams } from "@/lib/models/registry";
+import type { Template } from "@/lib/templates";
 import { uploadFile } from "./upload";
 import type { DType, MediaKind } from "@/lib/models/types";
 import { formatRub, type Fx } from "@/lib/money";
@@ -16,7 +17,9 @@ import { formatRub, type Fx } from "@/lib/money";
 export type PromptNodeT = Node<PromptData, "prompt">;
 export type ImageNodeT = Node<ImageData, "image">;
 export type ModelNodeT = Node<ModelData, "model">;
-export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT;
+export type NoteNodeT = Node<NoteData, "note">;
+export type GroupNodeT = Node<GroupData, "group">;
+export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT;
 
 export interface Toast { id: number; text: string; error?: boolean; action?: { label: string; run: () => void } }
 export interface ConfirmRequest { title: string; body: string; confirm: string; resolve: (ok: boolean) => void }
@@ -37,6 +40,8 @@ interface StudioStore {
   fx: Fx;
   /** last deletion, restorable with Ctrl+Z or the toast button */
   trash: { nodes: StudioNode[]; edges: Edge[] } | null;
+  galleryOpen: boolean;
+  templatesOpen: boolean;
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -54,6 +59,11 @@ interface StudioStore {
   copySelection(): number;
   paste(): void;
   duplicateSelection(): void;
+  /** Frame the selected nodes with a group (Ctrl+G) */
+  groupSelection(): void;
+  /** Drop a template next to the existing graph; returns the new node ids */
+  insertTemplate(t: Template): string[];
+  setPanel(p: { galleryOpen?: boolean; templatesOpen?: boolean }): void;
   updateData<T extends StudioNode>(id: string, patch: Partial<T["data"]>): void;
   setModel(id: string, modelId: string): void;
   removeNode(id: string): void;
@@ -82,9 +92,18 @@ export function toDoc(nodes: StudioNode[], edges: Edge[], viewport: Viewport): G
   };
 }
 
+/** React Flow presentation props derived from our node data. */
+function present(n: StudioNode): StudioNode {
+  if (n.type === "group") {
+    // groups sit behind everything and are sized by their data
+    return { ...n, dragHandle: ".group-head", zIndex: -1, width: n.data.width, height: n.data.height };
+  }
+  return { ...n, dragHandle: ".node-head" };
+}
+
 function fromDoc(doc: GraphDoc): { nodes: StudioNode[]; edges: Edge[] } {
   return {
-    nodes: doc.nodes.map((n) => ({ ...n, dragHandle: ".node-head" }) as StudioNode),
+    nodes: doc.nodes.map((n) => present(n as StudioNode)),
     edges: doc.edges.map((e) => ({ ...e, className: edgeClass(e) })),
   };
 }
@@ -94,9 +113,12 @@ export function isActive(state: GraphState, nodeId: string): boolean {
   return !!s && ACTIVE_STATUSES.includes(s);
 }
 
-/** Output handle id of a node = its data type. */
-export function outputType(n: StudioNode): DType {
-  return n.type === "prompt" ? "text" : n.type === "image" ? n.data.kind ?? "image" : n.data.kind;
+/** Output handle id of a node = its data type; null for notes and groups. */
+export function outputType(n: StudioNode): DType | null {
+  if (n.type === "prompt") return "text";
+  if (n.type === "image") return n.data.kind ?? "image";
+  if (n.type === "model") return n.data.kind;
+  return null;
 }
 
 /** Input port spec for a node's target handle (only model nodes have inputs). */
@@ -122,7 +144,7 @@ export function canConnect(nodes: StudioNode[], edges: Edge[], c: Connection | E
   if (c.source === c.target) return false;
   const src = nodes.find((n) => n.id === c.source);
   const port = inputPort(nodes.find((n) => n.id === c.target), c.targetHandle);
-  if (!src || !port || outputType(src) !== port.dtype) return false;
+  if (!src || !port || !outputType(src) || outputType(src) !== port.dtype) return false;
   return !reaches(edges, c.target, c.source); // no cycles
 }
 
@@ -130,6 +152,7 @@ export function canConnect(nodes: StudioNode[], edges: Edge[], c: Connection | E
 function freeSpot(nodes: StudioNode[], want: { x: number; y: number }) {
   const W = 340, H = 260, GAP = 24;
   const hits = (x: number, y: number) => nodes.some((n) => {
+    if (n.type === "group") return false; // new nodes may land inside a group
     const w = n.measured?.width ?? 332, h = n.measured?.height ?? 300;
     return x < n.position.x + w + GAP && x + W + GAP > n.position.x
       && y < n.position.y + h + GAP && y + H + GAP > n.position.y;
@@ -228,6 +251,32 @@ export const useStudio = create<StudioStore>((set, get) => ({
   lightbox: null,
   fx: { usdRub: 85, date: "", source: "fallback" },
   trash: null,
+  galleryOpen: false,
+  templatesOpen: false,
+
+  setPanel(p) {
+    set(p);
+  },
+
+  insertTemplate(t) {
+    const { nodes: tn, edges: te } = t.build();
+    const existing = get().nodes;
+    // to the right of everything already on the canvas, top-aligned with it
+    const right = existing.length ? Math.max(...existing.map((n) => n.position.x + (n.measured?.width ?? 340))) + 160 : 0;
+    const top = existing.length ? Math.min(...existing.map((n) => n.position.y)) : 0;
+    const minX = Math.min(...tn.map((n) => n.position.x)), minY = Math.min(...tn.map((n) => n.position.y));
+    const ids = new Map(tn.map((n) => [n.id, newId("n")]));
+    const nodes = tn.map((n) => present({
+      ...n, id: ids.get(n.id)!, selected: true,
+      position: { x: right + n.position.x - minX, y: top + n.position.y - minY },
+    } as StudioNode));
+    const edges: Edge[] = te.map((e) => ({
+      ...e, id: newId("e"), source: ids.get(e.source)!, target: ids.get(e.target)!, className: edgeClass(e),
+    }));
+    set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), ...nodes], edges: [...s.edges, ...edges] }));
+    scheduleSave();
+    return nodes.map((n) => n.id);
+  },
 
   init(graphId, doc, state, fx) {
     const { nodes, edges } = fromDoc(doc);
@@ -277,11 +326,13 @@ export const useStudio = create<StudioStore>((set, get) => ({
     let node: StudioNode;
     if (type === "prompt") node = { id, type, position, data: { text: "" } };
     else if (type === "image") node = { id, type, position, data: { fileKey: null, name: "", kind: "image" } };
+    else if (type === "note") node = { id, type, position, data: { text: "", color: "yellow" } };
+    else if (type === "group") node = { id, type, position, data: { title: "Группа", width: 720, height: 420 } };
     else {
       const spec = (opts.modelId && getModel(opts.modelId)) || defaultModel(opts.kind ?? "image");
       node = { id, type: "model", position, data: { kind: spec.kind, modelId: spec.id, prompt: "", params: defaultParams(spec) } };
     }
-    set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), { ...node, dragHandle: ".node-head", selected: true }] }));
+    set((s) => ({ nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), { ...present(node), selected: true }] }));
     scheduleSave();
     return id;
   },
@@ -343,7 +394,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
       const id = newId("n");
       idMap.set(n.id, id);
       const data = n.type === "model" ? (({ pinnedOutputId: _p, ...rest }) => rest)(n.data) : n.data; // results belong to the original
-      return { ...n, id, data, position: { x: n.position.x + 48, y: n.position.y + 48 }, selected: true } as StudioNode;
+      return present({ ...n, id, data, position: { x: n.position.x + 48, y: n.position.y + 48 }, selected: true } as StudioNode);
     });
     const edges = clipboard.edges.map((e) => ({
       ...e, id: newId("e"), source: idMap.get(e.source)!, target: idMap.get(e.target)!, selected: false,
@@ -356,6 +407,22 @@ export const useStudio = create<StudioStore>((set, get) => ({
 
   duplicateSelection() {
     if (get().copySelection()) get().paste();
+  },
+
+  groupSelection() {
+    const picked = get().nodes.filter((n) => n.selected && n.type !== "group");
+    if (!picked.length) { get().toast("Выдели ноды, чтобы собрать их в группу"); return; }
+    const PAD = 36, HEAD = 44;
+    const x0 = Math.min(...picked.map((n) => n.position.x)) - PAD;
+    const y0 = Math.min(...picked.map((n) => n.position.y)) - PAD - HEAD;
+    const x1 = Math.max(...picked.map((n) => n.position.x + (n.measured?.width ?? 320))) + PAD;
+    const y1 = Math.max(...picked.map((n) => n.position.y + (n.measured?.height ?? 240))) + PAD;
+    const node: GroupNodeT = {
+      id: newId("g"), type: "group", position: { x: x0, y: y0 },
+      data: { title: "Группа", width: Math.round(x1 - x0), height: Math.round(y1 - y0) },
+    };
+    set((s) => ({ nodes: [present(node), ...s.nodes] }));
+    scheduleSave();
   },
 
   updateData(id, patch) {

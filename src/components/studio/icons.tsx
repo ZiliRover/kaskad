@@ -2,13 +2,15 @@
 
 import {
   ArrowsOutSimpleIcon, BezierCurveIcon, ChatCenteredTextIcon, FilmReelIcon, FilmStripIcon, FrameCornersIcon,
-  ImageIcon, ImagesIcon, MagicWandIcon, PaintBrushIcon, PencilSimpleIcon, SpeakerHighIcon, SquaresFourIcon,
-  TextAaIcon, UploadSimpleIcon, WaveformIcon, type Icon,
+  ImageIcon, ImagesIcon, MagicWandIcon, NotePencilIcon, PaintBrushIcon, PencilSimpleIcon, ScissorsIcon,
+  SelectionIcon, SpeakerHighIcon, SquaresFourIcon, TextAaIcon, UploadSimpleIcon, WaveformIcon, type Icon,
 } from "@phosphor-icons/react";
 import type { DType, ModelCaps, ModelGroup } from "@/lib/models/types";
 
 /** One icon per node type, tinted with the color of the data it produces. */
-export type NodeKey = "prompt" | "upload" | `upload:${"image" | "video" | "audio"}` | `model:${"image" | "video" | "text"}`;
+export type NodeKey =
+  | "prompt" | "upload" | "note" | "group" | "tool"
+  | `upload:${"image" | "video" | "audio"}` | `model:${"image" | "video" | "text"}`;
 
 const NODE_ICONS: Record<NodeKey, Icon> = {
   prompt: TextAaIcon,
@@ -19,11 +21,14 @@ const NODE_ICONS: Record<NodeKey, Icon> = {
   "model:image": MagicWandIcon,
   "model:video": FilmStripIcon,
   "model:text": ChatCenteredTextIcon,
+  note: NotePencilIcon,
+  group: SelectionIcon,
+  tool: ScissorsIcon,
 };
 
-export function NodeIcon({ node, dtype, size = 16 }: { node: NodeKey; dtype: DType; size?: number }) {
+export function NodeIcon({ node, dtype, size = 16 }: { node: NodeKey; dtype: DType | null; size?: number }) {
   const I = NODE_ICONS[node];
-  return <I size={size} weight="regular" className={`type-icon t-${dtype}`} aria-hidden />;
+  return <I size={size} weight="regular" className={`type-icon${dtype ? ` t-${dtype}` : " t-none"}`} aria-hidden />;
 }
 
 /** Palette group icons: what the models in the group do. */
@@ -34,6 +39,7 @@ export const GROUP_ICONS: Record<ModelGroup, Icon> = {
   "image-style": PaintBrushIcon,
   "image-vector": BezierCurveIcon,
   text: ChatCenteredTextIcon,
+  tools: ScissorsIcon,
 };
 
 /** Capability badges, each with a plain-language explanation. */

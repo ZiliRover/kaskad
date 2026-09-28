@@ -1,24 +1,29 @@
 "use client";
 
-import { CaretDownIcon, MagnifyingGlassIcon, XIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, MagnifyingGlassIcon, XIcon } from "@phosphor-icons/react";
 import { useReactFlow } from "@xyflow/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatRub } from "@/lib/money";
 import { estimate } from "@/lib/models/pricing";
 import { MODELS, defaultParams } from "@/lib/models/registry";
 import type { ModelCaps, ModelGroup, ModelSpec } from "@/lib/models/types";
-import { PALETTE_MIME, type PalettePayload } from "./Canvas";
-import { CapIcons, GROUP_ICONS, NodeIcon } from "./icons";
+import { PALETTE_MIME, setDragPayload, type PalettePayload } from "./Canvas";
+import { CapIcons, GROUP_ICONS, NodeIcon, type NodeKey } from "./icons";
 import { useStudio } from "./store";
 
-const GROUPS: { id: ModelGroup; title: string }[] = [
+type SectionId = "inputs" | "canvas" | ModelGroup;
+
+const MODEL_GROUPS: { id: ModelGroup; title: string }[] = [
   { id: "video", title: "Видео" },
-  { id: "video-edit", title: "Правка и апскейл видео" },
   { id: "image", title: "Картинки" },
+  { id: "tools", title: "Инструменты" },
+  { id: "video-edit", title: "Правка и апскейл видео" },
   { id: "image-style", title: "Стиль по образцам" },
   { id: "image-vector", title: "Векторы SVG" },
   { id: "text", title: "Текст (AI)" },
 ];
+
+const DEFAULT_OPEN: SectionId[] = ["inputs", "video", "image", "tools"];
 
 /** Filters answer "what do I need this model to take or do". */
 const FILTERS: { key: keyof ModelCaps; label: string }[] = [
@@ -31,9 +36,54 @@ const FILTERS: { key: keyof ModelCaps; label: string }[] = [
 
 const hasCap = (m: ModelSpec, k: keyof ModelCaps) => (k === "variants" ? m.caps.variants > 1 : !!m.caps[k]);
 
+const WIDTH_KEY = "kaskad-sidebar-width";
+const OPEN_KEY = "kaskad-sidebar-open";
+const MIN_W = 280, MAX_W = 520, DEFAULT_W = 340;
+
+function load<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
+}
+function save(key: string, v: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* convenience only */ }
+}
+
 function startDrag(e: React.DragEvent, payload: PalettePayload) {
   e.dataTransfer.setData(PALETTE_MIME, JSON.stringify(payload));
   e.dataTransfer.effectAllowed = "copy";
+  setDragPayload(payload);
+}
+
+const endDrag = () => setDragPayload(null);
+
+function Section({ id, title, icon, count, open, onToggle, children }: {
+  id: SectionId; title: string; icon: React.ReactNode; count?: number;
+  open: boolean; onToggle: (id: SectionId) => void; children: React.ReactNode;
+}) {
+  return (
+    <section className={`palette${open ? " is-open" : ""}`}>
+      <button type="button" className="side-title" aria-expanded={open} onClick={() => onToggle(id)}>
+        <CaretRightIcon size={10} weight="bold" className="side-caret" aria-hidden />
+        {icon}
+        {title}
+        {count !== undefined && <span className="side-count">{count}</span>}
+      </button>
+      {open && <div className="palette-items">{children}</div>}
+    </section>
+  );
+}
+
+function SimpleItem({ node, title, desc, payload, onAdd }: {
+  node: NodeKey; title: string; desc: string; payload: PalettePayload; onAdd: (p: PalettePayload) => void;
+}) {
+  return (
+    <button
+      type="button" className="palette-item" draggable
+      onDragStart={(e) => startDrag(e, payload)} onDragEnd={endDrag} onClick={() => onAdd(payload)}
+    >
+      <NodeIcon node={node} dtype={node === "prompt" ? "text" : node === "upload" ? "image" : null} />
+      <span className="pi-text"><span className="pi-title">{title}</span><span className="pi-desc">{desc}</span></span>
+    </button>
+  );
 }
 
 export function Sidebar() {
@@ -42,7 +92,37 @@ export function Sidebar() {
   const { screenToFlowPosition } = useReactFlow();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<(keyof ModelCaps)[]>([]);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [open, setOpen] = useState<SectionId[]>(DEFAULT_OPEN);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [width, setWidth] = useState(DEFAULT_W);
+
+  useEffect(() => {
+    setOpen(load(OPEN_KEY, DEFAULT_OPEN));
+    setWidth(Math.min(MAX_W, Math.max(MIN_W, load(WIDTH_KEY, DEFAULT_W))));
+  }, []);
+
+  const toggle = (id: SectionId) => setOpen((cur) => {
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    save(OPEN_KEY, next);
+    return next;
+  });
+
+  // drag the right edge to resize; double-click resets
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = width;
+    let w = w0;
+    const move = (ev: PointerEvent) => { w = Math.min(MAX_W, Math.max(MIN_W, w0 + ev.clientX - x0)); setWidth(w); };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.classList.remove("is-resizing");
+      save(WIDTH_KEY, w);
+    };
+    document.body.classList.add("is-resizing");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   const addAtCenter = (p: PalettePayload) => {
     const r = document.querySelector(".react-flow")?.getBoundingClientRect();
@@ -63,15 +143,10 @@ export function Sidebar() {
     && filters.every((f) => hasCap(m, f)));
 
   return (
-    <aside className="sidebar" aria-label="Ноды и модели">
+    <aside className="sidebar" aria-label="Ноды и модели" style={{ width }}>
       <div className="search">
         <MagnifyingGlassIcon size={14} aria-hidden className="search-icon" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Найти модель"
-          aria-label="Поиск модели"
-        />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти модель" aria-label="Поиск модели" />
         {query && (
           <button type="button" className="icon-btn" aria-label="Очистить поиск" onClick={() => setQuery("")}>
             <XIcon size={12} weight="bold" aria-hidden />
@@ -83,10 +158,7 @@ export function Sidebar() {
           const on = filters.includes(f.key);
           return (
             <button
-              key={f.key}
-              type="button"
-              className={`chip${on ? " is-on" : ""}`}
-              aria-pressed={on}
+              key={f.key} type="button" className={`chip${on ? " is-on" : ""}`} aria-pressed={on}
               onClick={() => setFilters((cur) => (on ? cur.filter((x) => x !== f.key) : [...cur, f.key]))}
             >{f.label}</button>
           );
@@ -95,60 +167,42 @@ export function Sidebar() {
 
       <div className="palette-scroll">
         {!narrowing && (
-          <section className="palette">
-            <h2 className="side-title">Входные данные</h2>
-            <button
-              type="button" className="palette-item" draggable
-              onDragStart={(e) => startDrag(e, { type: "prompt" })}
-              onClick={() => addAtCenter({ type: "prompt" })}
-            >
-              <NodeIcon node="prompt" dtype="text" />
-              <span className="pi-text"><span className="pi-title">Промт</span><span className="pi-desc">Текст для моделей</span></span>
-            </button>
-            <button
-              type="button" className="palette-item" draggable
-              onDragStart={(e) => startDrag(e, { type: "image" })}
-              onClick={() => addAtCenter({ type: "image" })}
-            >
-              <NodeIcon node="upload" dtype="image" />
-              <span className="pi-text">
-                <span className="pi-title">Файл</span>
-                <span className="pi-desc">Картинка, видео или аудио</span>
-              </span>
-            </button>
-          </section>
+          <Section id="inputs" title="Входные данные" icon={null} open={open.includes("inputs")} onToggle={toggle}>
+            <SimpleItem node="prompt" title="Промт" desc="Текст для моделей" payload={{ type: "prompt" }} onAdd={addAtCenter} />
+            <SimpleItem node="upload" title="Файл" desc="Картинка, видео или аудио" payload={{ type: "image" }} onAdd={addAtCenter} />
+          </Section>
         )}
 
-        {GROUPS.map((g) => {
+        {MODEL_GROUPS.map((g) => {
           const all = matches.filter((m) => m.group === g.id);
           if (!all.length) return null;
-          const expanded = narrowing || open[g.id];
-          const shown = expanded ? all : all.filter((m) => m.featured).concat(all.every((m) => !m.featured) ? all.slice(0, 4) : []);
+          const isOpen = narrowing || open.includes(g.id);
+          const showAll = narrowing || expanded[g.id] || g.id === "tools";
+          const featured = all.filter((m) => m.featured);
+          const shown = showAll ? all : featured.length ? featured : all.slice(0, 4);
           const hidden = all.length - shown.length;
           const GIcon = GROUP_ICONS[g.id];
           return (
-            <section key={g.id} className="palette">
-              <h2 className="side-title">
-                <GIcon size={13} aria-hidden />
-                {g.title}
-                <span className="side-count">{all.length}</span>
-              </h2>
+            <Section
+              key={g.id} id={g.id} title={g.title} count={all.length}
+              icon={<GIcon size={13} aria-hidden />}
+              open={isOpen} onToggle={toggle}
+            >
               {shown.map((m) => {
                 const usd = prices.get(m.id);
+                const payload: PalettePayload = { type: "model", kind: m.kind, modelId: m.id };
                 return (
                   <button
-                    key={m.id}
-                    type="button"
-                    className="palette-item model-item"
-                    draggable
-                    onDragStart={(e) => startDrag(e, { type: "model", kind: m.kind, modelId: m.id })}
-                    onClick={() => addAtCenter({ type: "model", kind: m.kind, modelId: m.id })}
-                    title={m.blurb || `${m.vendor} ${m.name}`}
+                    key={m.id} type="button" className="palette-item model-item" draggable
+                    onDragStart={(e) => startDrag(e, payload)} onDragEnd={endDrag} onClick={() => addAtCenter(payload)}
+                    title={`${m.blurb || `${m.vendor} ${m.name}`}\nПеретащи на холст или на ноду, чтобы сменить в ней модель`}
                   >
                     <span className="pi-text">
                       <span className="pi-title">
                         {m.name}
-                        {usd !== null && usd !== undefined && <span className="pi-price">от {formatRub(usd, fx)}</span>}
+                        {usd !== null && usd !== undefined && (
+                          <span className="pi-price">{m.pricing.type === "free" ? "бесплатно" : `от ${formatRub(usd, fx)}`}</span>
+                        )}
                       </span>
                       <span className="pi-desc">{m.blurb || m.vendor}</span>
                       <CapIcons caps={m.caps} />
@@ -156,30 +210,40 @@ export function Sidebar() {
                   </button>
                 );
               })}
-              {!narrowing && (hidden > 0 || open[g.id]) && (
-                <button
-                  type="button"
-                  className="show-more"
-                  aria-expanded={!!open[g.id]}
-                  onClick={() => setOpen((o) => ({ ...o, [g.id]: !o[g.id] }))}
-                >
-                  <CaretDownIcon size={11} weight="bold" aria-hidden className={open[g.id] ? "flip" : ""} />
-                  {open[g.id] ? "Свернуть" : `Ещё ${hidden}`}
+              {!narrowing && hidden > 0 && (
+                <button type="button" className="show-more" onClick={() => setExpanded((x) => ({ ...x, [g.id]: true }))}>
+                  Показать ещё {hidden}
                 </button>
               )}
-            </section>
+              {!narrowing && expanded[g.id] && g.id !== "tools" && featured.length > 0 && (
+                <button type="button" className="show-more" onClick={() => setExpanded((x) => ({ ...x, [g.id]: false }))}>
+                  Только популярные
+                </button>
+              )}
+            </Section>
           );
         })}
+
+        {!narrowing && (
+          <Section id="canvas" title="Холст" icon={null} open={open.includes("canvas")} onToggle={toggle}>
+            <SimpleItem node="note" title="Заметка" desc="Бриф, идея, что поправить" payload={{ type: "note" }} onAdd={addAtCenter} />
+            <SimpleItem node="group" title="Группа" desc="Рамка для части графа (Ctrl+G)" payload={{ type: "group" }} onAdd={addAtCenter} />
+          </Section>
+        )}
 
         {narrowing && matches.length === 0 && (
           <p className="palette-empty">Ничего не нашлось. Попробуй другое название или сними фильтры.</p>
         )}
       </div>
 
-      <div className="side-foot">
-        <p>Соединяй выход и вход одного цвета. Голубой: текст, жёлтый: картинка, розовый: видео, бирюзовый: аудио.</p>
-        <p>Ctrl+C и Ctrl+V копируют ноды, Ctrl+D дублирует, Ctrl+Z возвращает удалённое.</p>
-      </div>
+      <div
+        className="sidebar-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Ширина панели"
+        onPointerDown={startResize}
+        onDoubleClick={() => { setWidth(DEFAULT_W); save(WIDTH_KEY, DEFAULT_W); }}
+      />
     </aside>
   );
 }

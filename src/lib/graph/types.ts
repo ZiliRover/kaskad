@@ -25,6 +25,18 @@ export const modelData = z.object({
   pinnedOutputId: z.string().uuid().optional(),
 });
 
+/** Canvas annotations: no inputs or outputs, never executed. */
+export const NOTE_COLORS = ["yellow", "blue", "pink", "green", "gray"] as const;
+export const noteData = z.object({
+  text: z.string().max(20000),
+  color: z.enum(NOTE_COLORS).optional(),
+});
+export const groupData = z.object({
+  title: z.string().max(200),
+  width: z.number().min(80).max(20000),
+  height: z.number().min(60).max(20000),
+});
+
 const position = z.object({ x: z.number(), y: z.number() });
 const id = z.string().min(1).max(64);
 
@@ -32,6 +44,8 @@ export const graphNode = z.discriminatedUnion("type", [
   z.object({ id, type: z.literal("prompt"), position, data: promptData }),
   z.object({ id, type: z.literal("image"), position, data: imageData }),
   z.object({ id, type: z.literal("model"), position, data: modelData }),
+  z.object({ id, type: z.literal("note"), position, data: noteData }),
+  z.object({ id, type: z.literal("group"), position, data: groupData }),
 ]);
 
 export const graphEdge = z.object({
@@ -51,15 +65,18 @@ export const graphDoc = z.object({
 export type PromptData = z.infer<typeof promptData>;
 export type ImageData = z.infer<typeof imageData>;
 export type ModelData = z.infer<typeof modelData>;
+export type NoteData = z.infer<typeof noteData>;
+export type GroupData = z.infer<typeof groupData>;
 export type GraphNode = z.infer<typeof graphNode>;
 export type GraphEdge = z.infer<typeof graphEdge>;
 export type GraphDoc = z.infer<typeof graphDoc>;
 
 export type ModelNode = Extract<GraphNode, { type: "model" }>;
 
-/** Output handle (= data type) of every node. Model nodes output their own kind. */
-export function outputHandle(node: GraphNode): DType {
+/** Output handle (= data type) of a node; null for annotations, which have none. */
+export function outputHandle(node: GraphNode): DType | null {
   if (node.type === "prompt") return "text";
   if (node.type === "image") return node.data.kind ?? "image";
-  return node.data.kind;
+  if (node.type === "model") return node.data.kind;
+  return null;
 }

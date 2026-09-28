@@ -121,6 +121,7 @@ function refFor(src: GraphNode, targetId: string, portLabel: string): InputRef {
     if (!src.data.fileKey) throw new PlanError(targetId, "В подключённую ноду загрузки не добавлен файл");
     return { type: "file", key: src.data.fileKey };
   }
+  if (src.type !== "model") throw new PlanError(targetId, "Заметки и группы не передают данные");
   // the user may have picked an earlier result/variant to pass on
   return src.data.pinnedOutputId
     ? { type: "node", nodeId: src.id, outputId: src.data.pinnedOutputId }

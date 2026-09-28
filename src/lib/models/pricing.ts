@@ -117,6 +117,7 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
 
 export function estimate(spec: ModelSpec, ctx: EstimateContext): Estimate {
   const p = spec.pricing;
+  if (p.type === "free") return { usd: 0, approx: false };
   if (p.type === "video") return videoEstimate(spec, p.skus, ctx);
   if (p.type === "image") {
     // one run can return several variants, each billed

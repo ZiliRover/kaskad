@@ -73,7 +73,7 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
         </button>
       )}
       {out.kind === "video" && out.url && (
-        <video key={out.url} className="result-media nodrag" src={out.url} controls loop playsInline preload="metadata" />
+        <video key={out.url} className="result-media nodrag" src={`${out.url}#t=0.1`} controls loop playsInline preload="metadata" />
       )}
       {out.kind === "text" && <div className="result-text nodrag nowheel">{out.text}</div>}
 

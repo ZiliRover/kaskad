@@ -43,6 +43,9 @@ export type GraphState = Record<string, NodeState>;
 /** One entry of a node's version history. */
 export interface OutputVersion {
   id: string;
+  nodeId: string;
+  /** storage key, lets a result be reused as an upload (gallery drag) */
+  fileKey: string | null;
   kind: "text" | "image" | "video";
   url: string | null;
   mime: string | null;

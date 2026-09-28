@@ -54,18 +54,21 @@ export async function graphExists(id: string): Promise<boolean> {
   return !!row;
 }
 
-export async function listOutputs(graphId: string, nodeId: string): Promise<OutputVersion[]> {
+/** Results of one node (its versions), or of the whole graph (gallery) when nodeId is null. */
+export async function listOutputs(graphId: string, nodeId: string | null, limit = 100): Promise<OutputVersion[]> {
   const rows = await db.select({
-    id: outputs.id, kind: outputs.kind, fileKey: outputs.fileKey, mime: outputs.mime,
+    id: outputs.id, nodeId: outputs.nodeId, kind: outputs.kind, fileKey: outputs.fileKey, mime: outputs.mime,
     text: outputs.text, createdAt: outputs.createdAt, costUsd: jobs.costUsd,
   })
     .from(outputs)
     .innerJoin(jobs, eq(jobs.id, outputs.jobId))
-    .where(and(eq(outputs.graphId, graphId), eq(outputs.nodeId, nodeId)))
+    .where(nodeId ? and(eq(outputs.graphId, graphId), eq(outputs.nodeId, nodeId)) : eq(outputs.graphId, graphId))
     .orderBy(desc(outputs.createdAt))
-    .limit(100);
+    .limit(limit);
   return rows.map((r) => ({
     id: r.id,
+    nodeId: r.nodeId,
+    fileKey: r.fileKey,
     kind: r.kind,
     url: r.fileKey ? fileUrl(r.fileKey) : null,
     mime: r.mime,

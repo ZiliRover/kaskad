@@ -24,6 +24,7 @@ export function Shortcuts() {
         const n = s.copySelection();
         if (n) s.toast(n > 1 ? `Скопировано нод: ${n}` : "Нода скопирована");
       } else if (e.code === "KeyD") { e.preventDefault(); s.duplicateSelection(); }
+      else if (e.code === "KeyG") { e.preventDefault(); s.groupSelection(); }
       // Ctrl+V is handled by the paste event: it also carries files from the OS clipboard
     };
 

@@ -1,9 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
-import { getModel } from "@/lib/models/registry";
+import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
 import { db, outputs, type JobRow } from "../db";
 import { getProvider, ProviderError } from "../providers";
-import { asDataUrl, newKey, putFile } from "../storage";
+import { asDataUrl, newKey, putFile, storagePath } from "../storage";
+import { concatVideos, extractFrame } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
 
 const VIDEO_POLL_MS = 5_000;
@@ -55,6 +56,37 @@ async function resolveMedia(job: JobRow, refs: InputRef[] = []): Promise<string[
   return urls;
 }
 
+/** Local file paths of media inputs, for tools that work on disk. */
+async function resolvePaths(job: JobRow, refs: InputRef[] = []): Promise<string[]> {
+  const paths: string[] = [];
+  for (const r of refs) {
+    if (r.type === "file") paths.push(storagePath(r.key));
+    else if (r.type === "node") {
+      const o = await nodeOutput(job.graphId, r);
+      if (!o.fileKey) throw new InputError("Входная нода вернула не файл");
+      paths.push(storagePath(o.fileKey));
+    }
+  }
+  return paths;
+}
+
+async function runTool(job: JobRow) {
+  const { ports, params } = job.input;
+  if (job.modelId === "kaskad/last-frame") {
+    const [video] = await resolvePaths(job, ports.video);
+    if (!video) throw new InputError("Подключи видео");
+    const png = await extractFrame(video, params.which === "first" ? "first" : "last");
+    await completeJob(job, [{ fileKey: await store(job, png, "image/png"), mime: "image/png" }], 0);
+    return;
+  }
+  if (job.modelId === "kaskad/concat") {
+    const mp4 = await concatVideos(await resolvePaths(job, ports.clips));
+    await completeJob(job, [{ fileKey: await store(job, mp4, "video/mp4"), mime: "video/mp4" }], 0);
+    return;
+  }
+  throw new InputError("Неизвестный инструмент");
+}
+
 async function store(job: JobRow, bytes: Uint8Array, mime: string) {
   const key = newKey(`outputs/${job.graphId}`, mime);
   await putFile(key, bytes);
@@ -62,6 +94,7 @@ async function store(job: JobRow, bytes: Uint8Array, mime: string) {
 }
 
 async function run(job: JobRow) {
+  if (job.modelId.startsWith(TOOL_PREFIX)) return runTool(job);
   const provider = getProvider();
   const { ports, params } = job.input;
   const prompt = await resolveText(job, ports.prompt);

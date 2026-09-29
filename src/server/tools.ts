@@ -369,3 +369,44 @@ export async function burnSubtitles(video: string, words: Word[], style: Subtitl
     return readFile(path.join(dir, "out.mp4"));
   });
 }
+
+// ---------------------------------------------------------------- montage
+
+export interface MontageClip { path: string; start: number; end: number | null }
+
+/**
+ * The timeline: clips in the chosen order, each trimmed, normalised to the first
+ * clip's frame and joined, optionally through short fades to black.
+ */
+export async function montage(clips: MontageClip[], fade: boolean): Promise<Uint8Array> {
+  if (!clips.length) throw new ProviderError("На таймлайне нет роликов");
+  const info = await Promise.all(clips.map((c) => probe(c.path)));
+  const lengths = await Promise.all(clips.map(async (c) => {
+    const total = await duration(c.path);
+    const start = Math.min(Math.max(0, c.start), Math.max(0, total - 0.2));
+    const end = c.end === null ? total : Math.min(total, Math.max(start + 0.2, c.end));
+    return { start, end, len: end - start };
+  }));
+  const W = even(info[0].width), H = even(info[0].height);
+  const audio = info.every((i) => i.audio);
+  const F = 0.35;
+  const parts = clips.map((_, i) => {
+    const { len } = lengths[i];
+    const fades = fade ? `,fade=t=in:st=0:d=${Math.min(F, len / 3)},fade=t=out:st=${Math.max(0, len - F)}:d=${Math.min(F, len / 3)}` : "";
+    const afades = fade ? `,afade=t=in:st=0:d=${Math.min(F, len / 3)},afade=t=out:st=${Math.max(0, len - F)}:d=${Math.min(F, len / 3)}` : "";
+    return `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p,setpts=PTS-STARTPTS${fades}[v${i}]`
+      + (audio ? `;[${i}:a]aresample=48000,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS${afades}[a${i}]` : "");
+  });
+  const inputs = clips.map((_, i) => (audio ? `[v${i}][a${i}]` : `[v${i}]`)).join("");
+  const filter = `${parts.join(";")};${inputs}concat=n=${clips.length}:v=1:a=${audio ? 1 : 0}[v]${audio ? "[a]" : ""}`;
+  return withTmp(async (dir) => {
+    const out = path.join(dir, "montage.mp4");
+    // -ss/-t before each input trims it before decoding
+    const args = clips.flatMap((c, i) => ["-ss", lengths[i].start.toFixed(3), "-t", lengths[i].len.toFixed(3), "-i", c.path]);
+    await exec(FFMPEG, [
+      "-v", "error", ...args, "-filter_complex", filter, "-map", "[v]",
+      ...(audio ? ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"] : []), ...H264, "-y", out,
+    ], 15 * 60_000);
+    return readFile(out);
+  });
+}

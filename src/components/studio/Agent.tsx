@@ -21,6 +21,26 @@ const EXAMPLES = [
   "Перерисовать мою картинку в стиле аниме и сделать 9:16",
 ];
 
+const VOICES: [string, string][] = [
+  ["Russian_ReliableMan", "Мужской, спокойный"], ["Russian_AttractiveGuy", "Мужской, обаятельный"],
+  ["Russian_BrightHeroine", "Женский, яркий"], ["Russian_AmbitiousWoman", "Женский, уверенный"],
+];
+
+interface VideoForm { seconds: 15 | 30 | 60; aspect: "9:16" | "16:9" | "1:1"; voice: string; subtitles: boolean; music: boolean; quality: "draft" | "final" }
+
+function Choice({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return (
+    <div className="director-field">
+      <span className="auth-label">{label}</span>
+      <div className="director-chips" role="radiogroup" aria-label={label}>
+        {options.map(([v, l]) => (
+          <button key={v} type="button" role="radio" aria-checked={value === v} className={`chip${value === v ? " is-on" : ""}`} onClick={() => onChange(v)}>{l}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Price of one run of the whole proposal (lists multiply their models). */
 function proposalPrice(p: Proposal): { usd: number; approx: boolean } {
   const fans = fanOut(p);
@@ -49,6 +69,8 @@ export function Agent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Proposal | null>(null);
+  const [mode, setMode] = useState<"graph" | "video">("graph");
+  const [video, setVideo] = useState<VideoForm>({ seconds: 15, aspect: "9:16", voice: VOICES[0][0], subtitles: true, music: false, quality: "draft" });
 
   useEffect(() => {
     if (!open) return;
@@ -60,9 +82,12 @@ export function Agent() {
   const build = async () => {
     setBusy(true); setError(null); setResult(null);
     try {
-      const r = await fetch("/api/agent", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request }),
-      });
+      const r = mode === "graph"
+        ? await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request }) })
+        : await fetch("/api/director", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idea: request, ...video, voice: video.voice || null }),
+        });
       if (authLost(r)) return;
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error ?? "Не удалось собрать граф");
@@ -95,7 +120,13 @@ export function Agent() {
         <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setOpen(false); }}>
           <div className="dialog agent" role="dialog" aria-modal="true" aria-labelledby="agent-title">
             <div className="templates-head">
-              <h2 id="agent-title" className="dialog-title">Собрать граф по описанию</h2>
+              <div className="agent-tabs" role="tablist">
+                <button type="button" role="tab" aria-selected={mode === "graph"} className={mode === "graph" ? "is-on" : undefined}
+                  disabled={busy || !!result} onClick={() => setMode("graph")}>Граф по описанию</button>
+                <button type="button" role="tab" aria-selected={mode === "video"} className={mode === "video" ? "is-on" : undefined}
+                  disabled={busy || !!result} onClick={() => setMode("video")}>Ролик по идее</button>
+              </div>
+              <h2 id="agent-title" className="sr-only">Собрать граф</h2>
               <button type="button" className="icon-btn" aria-label="Закрыть" disabled={busy} onClick={() => setOpen(false)}>
                 <XIcon size={14} weight="bold" aria-hidden />
               </button>
@@ -105,20 +136,44 @@ export function Agent() {
               <form className="agent-form" onSubmit={(e) => { e.preventDefault(); if (request.trim().length >= 3) void build(); }}>
                 <textarea
                   className="field agent-input" rows={4} autoFocus maxLength={2000} disabled={busy}
-                  placeholder="Что нужно получить? Например: вертикальное видео с моим товаром, который вращается на подиуме"
+                  placeholder={mode === "graph"
+                    ? "Что нужно получить? Например: вертикальное видео с моим товаром, который вращается на подиуме"
+                    : "Идея ролика. Например: утро в маленькой кофейне, бариста готовит капучино, город просыпается"}
                   value={request} onChange={(e) => setRequest(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && request.trim().length >= 3) void build(); }}
                 />
-                <div className="agent-examples">
-                  {EXAMPLES.map((x) => (
-                    <button key={x} type="button" className="chip" disabled={busy} onClick={() => setRequest(x)}>{x}</button>
-                  ))}
-                </div>
+                {mode === "graph" ? (
+                  <div className="agent-examples">
+                    {EXAMPLES.map((x) => (
+                      <button key={x} type="button" className="chip" disabled={busy} onClick={() => setRequest(x)}>{x}</button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="director-options">
+                    <Choice label="Длина" value={String(video.seconds)} options={[["15", "15 с"], ["30", "30 с"], ["60", "60 с"]]}
+                      onChange={(v) => setVideo((x) => ({ ...x, seconds: Number(v) as 15 | 30 | 60 }))} />
+                    <Choice label="Кадр" value={video.aspect} options={[["9:16", "9:16"], ["16:9", "16:9"], ["1:1", "1:1"]]}
+                      onChange={(v) => setVideo((x) => ({ ...x, aspect: v as VideoForm["aspect"] }))} />
+                    <Choice label="Качество" value={video.quality} options={[["draft", "Черновик"], ["final", "Финал"]]}
+                      onChange={(v) => setVideo((x) => ({ ...x, quality: v as VideoForm["quality"] }))} />
+                    <label className="director-field">
+                      <span className="auth-label">Голос за кадром</span>
+                      <select className="field" value={video.voice} onChange={(e) => setVideo((x) => ({ ...x, voice: e.target.value }))}>
+                        <option value="">Без голоса</option>
+                        {VOICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </label>
+                    <label className="director-check"><input type="checkbox" checked={video.subtitles} onChange={(e) => setVideo((x) => ({ ...x, subtitles: e.target.checked }))} />Субтитры</label>
+                    <label className="director-check"><input type="checkbox" checked={video.music} onChange={(e) => setVideo((x) => ({ ...x, music: e.target.checked }))} />Музыка (Lyria)</label>
+                  </div>
+                )}
                 {error && <p className="auth-error" role="alert">{error}</p>}
                 <div className="dialog-actions">
-                  <span className="agent-note">Агент подберёт модели и напишет промты. Ты увидишь граф и цену до запуска.</span>
+                  <span className="agent-note">{mode === "graph"
+                    ? "Агент подберёт модели и напишет промты. Ты увидишь граф и цену до запуска."
+                    : "Режиссёр напишет сценарий по сценам и соберёт весь ролик: кадры, видео, монтаж, голос, субтитры."}</span>
                   <button type="submit" className="btn btn-primary" disabled={busy || request.trim().length < 3}>
-                    {busy ? "Собираю граф…" : "Собрать"}
+                    {busy ? (mode === "graph" ? "Собираю граф…" : "Пишу сценарий…") : "Собрать"}
                   </button>
                 </div>
               </form>

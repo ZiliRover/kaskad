@@ -13,6 +13,7 @@ import type { MediaKind, ParamValue } from "@/lib/models/types";
 import { isActive, useStudio, type ModelNodeT } from "../store";
 import { CompareMenu } from "../Compare";
 import { NodeShell } from "./NodeShell";
+import { TimelineEditor } from "./TimelineEditor";
 import { ParamField } from "./ParamField";
 import { ResultView } from "./ResultView";
 
@@ -186,6 +187,8 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
           })}
         </div>
       )}
+
+      {data.modelId === "kaskad/timeline" && <TimelineEditor nodeId={id} data={data} />}
 
       {spec && spec.params.length > 0 && (
         <div className="params">

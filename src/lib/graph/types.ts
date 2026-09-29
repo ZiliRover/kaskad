@@ -23,6 +23,12 @@ export const modelData = z.object({
   params: z.record(z.string(), paramValue),
   /** result chosen to pass downstream; unset = the latest one */
   pinnedOutputId: z.string().uuid().optional(),
+  /** montage node: clip order, trims and clips left out, keyed by clipKey() */
+  timeline: z.object({
+    order: z.array(z.string().max(120)).max(100).default([]),
+    trims: z.record(z.string().max(120), z.object({ start: z.number().min(0), end: z.number().nullable() })).default({}),
+    off: z.array(z.string().max(120)).max(100).default([]),
+  }).optional(),
 });
 
 /**
@@ -93,6 +99,11 @@ export function outputHandle(node: GraphNode): DType | null {
   if (node.type === "model") return node.data.kind;
   if (node.type === "list") return node.data.kind;
   return null;
+}
+
+/** Identity of a clip on a timeline: which node (and batch item) or which file it comes from. */
+export function clipKey(ref: { type: "node"; nodeId: string; item?: number } | { type: "file"; key: string }): string {
+  return ref.type === "file" ? `file:${ref.key}` : `${ref.nodeId}#${ref.item ?? ""}`;
 }
 
 /** The items of a list node: non-empty lines, or uploaded files. */

@@ -221,6 +221,20 @@ const TOOLS: ModelSpec[] = [
     pricing: { type: "free" },
   },
   {
+    id: "kaskad/timeline", kind: "video", group: "tools", name: "Монтаж", vendor: "Каскад",
+    blurb: "Таймлайн: порядок, обрезка, затемнения и звук", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [
+      { key: "clips", dtype: "video", label: "Ролики", max: 50, min: 1, hint: "порядок меняется на таймлайне" },
+      { key: "audio", dtype: "audio", label: "Звук", max: 1, min: 0, hint: "музыка или голос" },
+    ],
+    params: [
+      enumParam("transition", "Переходы", "cut", [["cut", "Встык"], ["fade", "Через затемнение"]]),
+      enumParam("mode", "Звук роликов", "replace", [["replace", "Заменить подключённым"], ["mix", "Смешать"]]),
+    ],
+    pricing: { type: "free" },
+  },
+  {
     id: "kaskad/subtitles", kind: "video", group: "tools", name: "Субтитры", vendor: "Каскад",
     blurb: "Распознаёт речь и вшивает субтитры, как в Reels", featured: false, promptOptional: true,
     caps: { ...NO_CAPS, sourceVideo: true },

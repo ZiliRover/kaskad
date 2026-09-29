@@ -1,11 +1,15 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
 import { getModel, MUSIC_MODELS, TOOL_PREFIX } from "@/lib/models/registry";
+import { writeFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { clipKey } from "@/lib/graph/types";
 import { db, jobs, outputs, type JobRow } from "../db";
 import { getProvider, providerMode, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
 import {
-  addAudio, burnSubtitles, caption, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
+  addAudio, burnSubtitles, caption, montage, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
   type CaptionStyle, type SubtitleStyle, type Word,
 } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
@@ -141,6 +145,27 @@ async function runTool(job: JobRow) {
       return out(await reframe(await one("video", "видео"), "video", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "video/mp4");
     case "kaskad/reframe-image":
       return out(await reframe(await one("image", "картинку"), "image", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "image/png");
+    case "kaskad/timeline": {
+      const refs = ports.clips ?? [];
+      const paths = await resolvePaths(job, refs);
+      const tl = job.input.timeline;
+      const keyed = refs.map((r, i) => ({ key: r.type === "text" ? "" : clipKey(r), path: paths[i] }));
+      const rank = (k: string) => { const i = tl?.order.indexOf(k) ?? -1; return i < 0 ? 1e6 : i; };
+      const clips = keyed
+        .map((c, i) => ({ ...c, i }))
+        .filter((c) => !tl?.off.includes(c.key))
+        .sort((a, b) => rank(a.key) - rank(b.key) || a.i - b.i)
+        .map((c) => ({ path: c.path, start: tl?.trims[c.key]?.start ?? 0, end: tl?.trims[c.key]?.end ?? null }));
+      if (!clips.length) throw new InputError("Все ролики на таймлайне выключены");
+      let bytes = await montage(clips, p("transition") === "fade");
+      const [sound] = await resolvePaths(job, ports.audio);
+      if (sound) {
+        const tmp = path.join(os.tmpdir(), `kaskad-${job.id}.mp4`);
+        await writeFile(tmp, bytes);
+        try { bytes = await addAudio(tmp, sound, p("mode") === "mix" ? "mix" : "replace"); } finally { await rm(tmp, { force: true }); }
+      }
+      return out(bytes, "video/mp4");
+    }
     case "kaskad/subtitles": {
       const file = await one("video", "видео");
       const text = await resolveText(job, ports.prompt);

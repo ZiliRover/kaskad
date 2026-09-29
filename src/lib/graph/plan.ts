@@ -188,7 +188,7 @@ export function planRun(opts: PlanOptions): PlanResult {
         item,
         kind: node.data.kind,
         modelId: spec.id,
-        input: { ports, params: node.data.params },
+        input: { ports, params: node.data.params, ...(node.data.timeline ? { timeline: node.data.timeline } : {}) },
         waitsFor: waits,
         estimate: estimate(spec, { params: node.data.params, inputCounts, promptChars }),
       });

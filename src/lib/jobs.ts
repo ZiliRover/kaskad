@@ -10,6 +10,8 @@ export type InputRef =
 export interface JobInput {
   ports: Record<string, InputRef[]>;
   params: Record<string, ParamValue>;
+  /** montage node: the timeline as it was when the run started */
+  timeline?: { order: string[]; trims: Record<string, { start: number; end: number | null }>; off: string[] };
 }
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "skipped" | "canceled";

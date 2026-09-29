@@ -2,6 +2,7 @@
 
 import { CaretLeftIcon, CaretRightIcon, CopyIcon, FlagIcon, HeartIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ART_SETS, artSlide } from "@/config/art";
 import { BRAND } from "@/config/brand";
 import type { FeedPost } from "@/lib/feed";
 
@@ -303,6 +304,12 @@ export function Showcase({ initial, operator }: { initial: FeedPost[]; operator:
       <main ref={wall} className={`feed-wall${loading && posts.length === 0 ? " is-loading" : ""}`} style={{ gap: GAP, padding: GAP }}>
         {posts.length === 0 && !loading ? (
           <div className="feed-empty">
+            <div className="feed-empty-art" aria-hidden>
+              {ART_SETS.slice(0, 5).map((set, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={set.id} src={artSlide(set.id, set.best[0])} alt="" style={{ ["--i" as string]: i }} />
+              ))}
+            </div>
             <h1>Витрина пока пустая</h1>
             <p>{kind === "all"
               ? "Здесь появятся картинки и видео, которые авторы решили показать. Выложи свою: у результата в студии нажми «В витрину»."

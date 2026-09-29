@@ -6,6 +6,7 @@ import { memo, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { fanOut } from "@/lib/graph/plan";
 import type { GraphDoc } from "@/lib/graph/types";
+import { draftParams } from "@/lib/models/draft";
 import { estimate } from "@/lib/models/pricing";
 import { formatKop, formatRub, priceTitle, toKop } from "@/lib/money";
 import { getModel, isBlocked, TOOL_PREFIX } from "@/lib/models/registry";
@@ -75,13 +76,15 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
   const setParam = (key: string, v: ParamValue) =>
     updateData<ModelNodeT>(id, { params: { ...data.params, [key]: v } });
 
-  const est = spec ? estimate(spec, { params: data.params, inputCounts: counts, promptChars }) : null;
+  const draft = useStudio((s) => s.draft);
+  const est = spec ? estimate(spec, { params: draft ? draftParams(spec, data.params) : data.params, inputCounts: counts, promptChars }) : null;
 
   // after a successful run the node shows what it actually cost, until its settings change
   const finalKop = job?.status === "succeeded"
     ? job.chargedKop ?? (job.costUsd !== null ? toKop(job.costUsd, fx) : null)
     : null;
-  const showFinal = finalKop !== null && job!.modelId === data.modelId && sameSettings(job!.params, data.params);
+  const showFinal = finalKop !== null && job!.modelId === data.modelId && !!job!.draft === draft
+    && sameSettings(job!.params, draft && spec ? draftParams(spec, data.params) : data.params);
 
   let status: { text: string; tone?: "error" | "ok" } | null = null;
   if (localError) status = { text: localError, tone: "error" };

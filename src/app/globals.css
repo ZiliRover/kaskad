@@ -1203,3 +1203,14 @@ button.side-title:hover { color: var(--text-2); }
 .seller-photo.has-photo { border-style: solid; }
 .seller-photo img { width: 100%; height: 100%; object-fit: contain; }
 .agent-tabs { flex-wrap: wrap; }
+
+/* draft mode */
+.draft-toggle { gap: 8px; }
+.draft-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--text-3); }
+.draft-toggle.is-on { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.draft-toggle.is-on .draft-dot { background: var(--warn); border-color: var(--warn); }
+.result { position: relative; }
+.draft-tag {
+  position: absolute; top: 6px; left: 6px; z-index: 1; padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 650; color: #1b1400; background: var(--warn);
+}

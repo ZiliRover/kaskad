@@ -73,6 +73,7 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
   // previous result stays visible (dimmed) while a new one generates
   return (
     <div className={`result${busy ? " is-stale" : ""}`}>
+      {node?.job?.draft && node.job.status === "succeeded" && <span className="draft-tag" title="Сделано в режиме черновика: дешёвые настройки">черновик</span>}
       {out.kind === "image" && out.url && (
         <button type="button" className="result-media nodrag" onClick={() => setLightbox(out.url)} aria-label="Открыть крупно">
           {/* eslint-disable-next-line @next/next/no-img-element */}

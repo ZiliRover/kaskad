@@ -91,6 +91,8 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
   graphId: string; graphName: string; projects: ProjectSummary[]; providerMode: "live" | "mock";
 }) {
   const run = useStudio((s) => s.run);
+  const draft = useStudio((s) => s.draft);
+  const setDraft = useStudio((s) => s.setDraft);
   const setPanel = useStudio((s) => s.setPanel);
   const galleryOpen = useStudio((s) => s.galleryOpen);
   const modelIds = useStudio((s) => s.nodes.filter((n) => n.type === "model").map((n) => n.id).join(","));
@@ -135,6 +137,17 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
           onClick={() => setMode(THEME_NEXT[mode])}
         >
           <ThemeIcon size={16} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className={`btn btn-ghost draft-toggle${draft ? " is-on" : ""}`}
+          aria-pressed={draft}
+          title={draft
+            ? "Черновик включён: 480p, низкое качество, без звука видео. Выключи и перезапусти, чтобы сделать финал"
+            : "Черновик: проверить идею дёшево, на минимальных настройках всех моделей"}
+          onClick={() => setDraft(!draft)}
+        >
+          <span className="draft-dot" aria-hidden />Черновик
         </button>
         <button
           type="button"

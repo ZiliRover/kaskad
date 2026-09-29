@@ -10,6 +10,7 @@
  */
 import type { InputRef, JobInput } from "../jobs";
 import { estimate, type Estimate } from "../models/pricing";
+import { draftParams } from "../models/draft";
 import { getModel } from "../models/registry";
 import { LIST_MAX, listItems, outputHandle, type GraphDoc, type GraphNode, type ModelNode } from "./types";
 
@@ -22,6 +23,8 @@ export interface PlanOptions {
   hasOutput: (nodeId: string) => boolean;
   /** upstream nodes already generating: depend on that job instead of starting a second one */
   isActive: (nodeId: string) => boolean;
+  /** draft mode: every model at its cheapest settings */
+  draft?: boolean;
 }
 
 /** A dependency: a node's job for one item, or (no item) all of the node's jobs. */
@@ -183,14 +186,15 @@ export function planRun(opts: PlanOptions): PlanResult {
       }
 
       const promptChars = (ports.prompt ?? []).reduce((s, r) => s + (r.type === "text" ? r.text.length : 400), 0);
+      const params = opts.draft ? draftParams(spec, node.data.params) : node.data.params;
       jobs.push({
         nodeId,
         item,
         kind: node.data.kind,
         modelId: spec.id,
-        input: { ports, params: node.data.params, ...(node.data.timeline ? { timeline: node.data.timeline } : {}) },
+        input: { ports, params, ...(opts.draft ? { draft: true as const } : {}), ...(node.data.timeline ? { timeline: node.data.timeline } : {}) },
         waitsFor: waits,
-        estimate: estimate(spec, { params: node.data.params, inputCounts, promptChars }),
+        estimate: estimate(spec, { params, inputCounts, promptChars }),
       });
     }
 

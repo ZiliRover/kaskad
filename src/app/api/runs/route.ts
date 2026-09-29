@@ -11,6 +11,7 @@ const body = z.object({
   doc: graphDoc,
   targets: z.array(z.string()).min(1).max(500),
   mode: z.enum(["missing", "all"]),
+  draft: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -18,10 +19,10 @@ export async function POST(req: Request) {
   if (deny) return deny;
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Некорректный запрос" }, { status: 400 });
-  const { graphId, doc, targets, mode } = parsed.data;
+  const { graphId, doc, targets, mode, draft } = parsed.data;
   if (!(await ownedGraph(graphId, user.id))) return NextResponse.json({ error: "Граф не найден" }, { status: 404 });
 
-  const r = await createRun(graphId, user.id, doc, targets, mode, isAdmin(user));
+  const r = await createRun(graphId, user.id, doc, targets, mode, isAdmin(user), !!draft);
   if (!r.ok) return NextResponse.json(r, { status: r.code === "funds" ? 402 : 422 });
   return NextResponse.json(r);
 }

@@ -157,6 +157,7 @@ interface StateRow extends Record<string, unknown> {
   queued: number | null;
   canceled: number | null;
   fanned: boolean | null;
+  draft: boolean | null;
   error: string | null;
   cost_usd: string | null;
   charged_kop: string | null;
@@ -204,6 +205,7 @@ export async function graphState(graphId: string): Promise<GraphState> {
              count(*) filter (where j.status = 'queued')::int as queued,
              count(*) filter (where j.status = 'canceled')::int as canceled,
              bool_or(j.item is not null) as fanned,
+             bool_or(coalesce((j.input->>'draft')::boolean, false)) as draft,
              (array_agg(j.error order by j.item nulls first) filter (where j.error is not null))[1] as error,
              sum(j.cost_usd) as cost_usd,
              (array_agg(j.model_id))[1] as model_id,
@@ -238,7 +240,7 @@ export async function graphState(graphId: string): Promise<GraphState> {
     )
     select coalesce(agg.node_id, lo.node_id) as node_id,
            agg.first_id, agg.first_status, agg.total, agg.done, agg.bad, agg.running, agg.queued, agg.canceled,
-           agg.fanned, agg.error, agg.cost_usd, agg.charged_kop, agg.model_id, agg.params,
+           agg.fanned, agg.draft, agg.error, agg.cost_usd, agg.charged_kop, agg.model_id, agg.params,
            agg.job_created, agg.started_at, agg.active_ids,
            lo.id as output_id, lo.kind, lo.file_key, lo.mime, lo.text, lo.created_at as output_created,
            coalesce(oc.n, 0) as output_count, b.batch
@@ -263,6 +265,7 @@ export async function graphState(graphId: string): Promise<GraphState> {
         createdAt: iso(r.job_created)!,
         startedAt: iso(r.started_at),
         activeIds: r.active_ids ?? [],
+        draft: !!r.draft,
         items: r.fanned ? { total: r.total ?? 0, done: r.done ?? 0, failed: r.bad ?? 0 } : null,
       } : null,
       output: r.output_id ? {

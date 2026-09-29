@@ -64,6 +64,9 @@ export interface StudioStore {
   /** nodes shown side by side in the compare view; empty = closed */
   compareIds: string[];
   publishOpen: boolean;
+  /** draft mode: runs use the cheapest settings of every model */
+  draft: boolean;
+  setDraft(on: boolean): void;
 
   init(graphId: string, doc: GraphDoc, state: GraphState, fx: Fx): void;
   onNodesChange(changes: NodeChange<StudioNode>[]): void;
@@ -300,6 +303,12 @@ export const useStudio = create<StudioStore>((set, get) => ({
   billingOpen: false,
   compareIds: [],
   publishOpen: false,
+  draft: false,
+
+  setDraft(on) {
+    set({ draft: on });
+    try { localStorage.setItem(`kaskad-draft-${get().graphId}`, on ? "1" : "0"); } catch { /* convenience only */ }
+  },
   blockedVendors: [],
 
   setPanel(p) {
@@ -327,6 +336,9 @@ export const useStudio = create<StudioStore>((set, get) => ({
   },
 
   init(graphId, doc, state, fx) {
+    let draft = false;
+    try { draft = localStorage.getItem(`kaskad-draft-${graphId}`) === "1"; } catch { /* convenience only */ }
+    set({ draft });
     const lifted = liftInlinePrompts(doc);
     const { nodes, edges } = fromDoc(lifted.doc);
     set({ graphId, nodes, edges, viewport: doc.viewport ?? { x: 80, y: 80, zoom: 1 }, state, fx });
@@ -653,6 +665,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
       mode,
       hasOutput: (id) => !!state[id]?.output,
       isActive: (id) => isActive(state, id),
+      draft: get().draft,
     });
     if (!plan.ok) {
       set((s) => ({ localErrors: { ...s.localErrors, [plan.nodeId]: plan.error } }));
@@ -690,7 +703,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // fresh snapshot: pins of re-running nodes were just cleared
-        body: JSON.stringify({ graphId, doc: toDoc(get().nodes, get().edges, get().viewport), targets, mode }),
+        body: JSON.stringify({ graphId, doc: toDoc(get().nodes, get().edges, get().viewport), targets, mode, draft: get().draft }),
       });
       if (authLost(r)) return;
       const data = await r.json().catch(() => ({}));

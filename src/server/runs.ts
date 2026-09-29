@@ -24,6 +24,7 @@ export async function createRun(
   graphId: string, userId: string, doc: GraphDoc, targets: string[], mode: "missing" | "all",
   /** operators generate straight from the provider account: nothing is reserved or charged */
   unlimited = false,
+  draft = false,
 ): Promise<CreateRunResult> {
   // a document may only feed the worker files its author can read
   for (const n of doc.nodes) {
@@ -57,6 +58,7 @@ export async function createRun(
       mode,
       hasOutput: (id) => withOutput.has(id),
       isActive: (id) => activeByNode.has(id),
+      draft,
     });
     if (!plan.ok) return plan;
     const blocked = blockedVendors();

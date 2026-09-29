@@ -10,6 +10,8 @@ export type InputRef =
 export interface JobInput {
   ports: Record<string, InputRef[]>;
   params: Record<string, ParamValue>;
+  /** run in draft mode: cheapest settings (see lib/models/draft) */
+  draft?: true;
   /** montage node: the timeline as it was when the run started */
   timeline?: { order: string[]; trims: Record<string, { start: number; end: number | null }>; off: string[] };
 }
@@ -34,6 +36,8 @@ export interface NodeState {
     startedAt: string | null;
     /** all jobs of the latest run still queued or running (a batch has several) */
     activeIds: string[];
+    /** made in draft mode */
+    draft: boolean;
     /** batch progress; null for a single run */
     items: { total: number; done: number; failed: number } | null;
   } | null;

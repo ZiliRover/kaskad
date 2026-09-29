@@ -221,6 +221,21 @@ const TOOLS: ModelSpec[] = [
     pricing: { type: "free" },
   },
   {
+    id: "kaskad/best-of", kind: "image", group: "tools", name: "Лучший вариант", vendor: "Каскад",
+    blurb: "ИИ-арт-директор выбирает лучшую картинку, при нужде перегенерирует", featured: false, promptOptional: true,
+    caps: NO_CAPS,
+    inputs: [
+      { key: "candidates", dtype: "image", label: "Варианты", max: 16, min: 1, hint: "все варианты и пакеты" },
+      { key: "prompt", dtype: "text", label: "Критерии", max: 1, min: 0, hint: "что важно" },
+    ],
+    params: [
+      enumParam("threshold", "Если лучший ниже", "off", [["off", "не перегенерировать"], ["6", "6 из 10"], ["7", "7 из 10"], ["8", "8 из 10"]]),
+      enumParam("attempts", "Попыток перегенерации", "1", [["1", "1"], ["2", "2"], ["3", "3"]]),
+    ],
+    // one look by a vision model; each regeneration costs its image model on top
+    pricing: { type: "flat", usd: 0.02 },
+  },
+  {
     id: "kaskad/timeline", kind: "video", group: "tools", name: "Монтаж", vendor: "Каскад",
     blurb: "Таймлайн: порядок, обрезка, затемнения и звук", featured: false, promptOptional: true,
     caps: { ...NO_CAPS, sourceVideo: true },

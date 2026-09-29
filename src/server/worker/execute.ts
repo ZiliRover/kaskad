@@ -7,7 +7,8 @@ import path from "node:path";
 import { clipKey } from "@/lib/graph/types";
 import { db, jobs, outputs, type JobRow } from "../db";
 import { getProvider, providerMode, ProviderError } from "../providers";
-import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
+import { DEFAULT_CRITERIA, judge } from "../judge";
+import { asDataUrl, mimeForKey, newKey, putFile, readStored, signedFileUrl, storagePath } from "../storage";
 import {
   addAudio, burnSubtitles, caption, montage, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
   type CaptionStyle, type SubtitleStyle, type Word,
@@ -53,6 +54,36 @@ async function nodeOutput(graphId: string, ref: Extract<InputRef, { type: "node"
     .orderBy(desc(outputs.createdAt)).limit(1);
   if (!o) throw new InputError("Входная нода ещё не дала результата");
   return o;
+}
+
+/** All results of a node's latest successful run: its variants, or its batch items in order. */
+async function latestRunOutputs(graphId: string, nodeId: string) {
+  const [last] = await db.select({ runId: jobs.runId }).from(jobs)
+    .where(and(eq(jobs.graphId, graphId), eq(jobs.nodeId, nodeId), eq(jobs.status, "succeeded")))
+    .orderBy(desc(jobs.createdAt)).limit(1);
+  if (!last) throw new InputError("Входная нода ещё не дала результата");
+  const rows = await db.select({ o: outputs }).from(outputs).innerJoin(jobs, eq(jobs.id, outputs.jobId))
+    .where(and(eq(jobs.runId, last.runId), eq(jobs.nodeId, nodeId), eq(jobs.status, "succeeded")))
+    .orderBy(asc(jobs.item), asc(outputs.createdAt));
+  return rows.map((r) => r.o);
+}
+
+/** Run an upstream image node's latest job again, without saving: fresh candidates to judge. */
+async function regenerate(job: JobRow, nodeId: string) {
+  const [src] = await db.select().from(jobs)
+    .where(and(eq(jobs.graphId, job.graphId), eq(jobs.nodeId, nodeId), eq(jobs.status, "succeeded")))
+    .orderBy(desc(jobs.createdAt)).limit(1);
+  if (!src || src.kind !== "image" || src.modelId.startsWith(TOOL_PREFIX)) return null;
+  const as = { ...job, input: src.input } as JobRow;
+  const prompt = await resolveText(as, src.input.ports.prompt);
+  const r = await getProvider().image({
+    model: src.modelId, prompt, params: src.input.params, references: await resolveMedia(as, src.input.ports.references),
+  });
+  const est = src.estimateUsd === null ? 0 : Number(src.estimateUsd);
+  return {
+    images: r.images.map((m) => ({ data: `data:${m.mime};base64,${Buffer.from(m.bytes).toString("base64")}`, mime: m.mime, bytes: m.bytes })),
+    costUsd: providerMode() === "mock" ? est : r.costUsd ?? est,
+  };
 }
 
 async function resolveText(job: JobRow, refs: InputRef[] = []): Promise<string> {
@@ -145,6 +176,45 @@ async function runTool(job: JobRow) {
       return out(await reframe(await one("video", "видео"), "video", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "video/mp4");
     case "kaskad/reframe-image":
       return out(await reframe(await one("image", "картинку"), "image", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "image/png");
+    case "kaskad/best-of": {
+      const criteria = (await resolveText(job, ports.prompt)) || DEFAULT_CRITERIA;
+      // every candidate of every source: all variants of its latest run, or a batch item
+      const keys: string[] = [];
+      const sources = new Set<string>();
+      for (const r of ports.candidates ?? []) {
+        if (r.type === "file") keys.push(r.key);
+        else if (r.type === "node" && r.item === undefined && !r.outputId) {
+          sources.add(r.nodeId);
+          for (const o of await latestRunOutputs(job.graphId, r.nodeId)) if (o.fileKey) keys.push(o.fileKey);
+        } else if (r.type === "node") {
+          const o = await nodeOutput(job.graphId, r);
+          if (o.fileKey) keys.push(o.fileKey);
+        }
+      }
+      if (!keys.length) throw new InputError("Нет картинок для выбора");
+      let pool: { data: string; mime: string; key?: string; bytes?: Uint8Array }[] = await Promise.all(
+        keys.slice(0, 16).map(async (k) => ({ data: await asDataUrl(k), mime: mimeForKey(k), key: k })));
+      let cost = 0;
+      let v = await judge(pool.map((x) => x.data), criteria, "");
+      cost += v.costUsd ?? 0;
+      let tries = 0;
+      const threshold = p("threshold") === "off" ? 0 : Number(p("threshold"));
+      const maxTries = Number(p("attempts")) || 1;
+      // below the bar: run the source image model again, judge the new batch, keep the best overall
+      while (threshold && v.score < threshold && tries < maxTries && sources.size) {
+        tries++;
+        const fresh = await regenerate(job, [...sources][0]);
+        if (!fresh) break;
+        cost += fresh.costUsd;
+        const next = await judge(fresh.images.map((x) => x.data), criteria, "");
+        cost += next.costUsd ?? 0;
+        if (next.score > v.score) { pool = fresh.images; v = next; }
+      }
+      const pick = pool[v.best];
+      const bytes = pick.bytes ?? new Uint8Array(await readStored(pick.key!));
+      const note = `Выбран вариант ${v.best + 1} из ${pool.length}: ${v.score}/10${tries ? `, перегенераций: ${tries}` : ""}. ${v.why}`.trim();
+      return completeJob(job, [{ fileKey: await store(job, bytes, pick.mime), mime: pick.mime, text: note }], billable(job, cost));
+    }
     case "kaskad/timeline": {
       const refs = ports.clips ?? [];
       const paths = await resolvePaths(job, refs);

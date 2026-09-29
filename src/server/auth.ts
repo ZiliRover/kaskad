@@ -16,6 +16,23 @@ const SESSION_DAYS = 30;
 const CODE_TTL_MIN = 10;
 const CODE_ATTEMPTS = 5;
 const CODES_PER_HOUR = 5;
+/** one address (office, home Wi-Fi) may ask for this many codes an hour across all emails */
+const CODES_PER_IP_HOUR = 20;
+/** welcome bonuses per address in 30 days: stops farming the bonus with throwaway emails */
+const BONUSES_PER_IP = 3;
+/** throwaway mail services: the account works, the welcome bonus is not given */
+const DISPOSABLE = new Set([
+  "mailinator.com", "guerrillamail.com", "10minutemail.com", "temp-mail.org", "tempmail.com", "yopmail.com",
+  "trashmail.com", "sharklasers.com", "getnada.com", "dispostable.com", "maildrop.cc", "mohmal.com", "emailondeck.com",
+  "throwawaymail.com", "fakeinbox.com", "tempmailo.com", "minuteinbox.com", "mail.tm", "dropmail.me", "1secmail.com",
+]);
+
+/** The caller's address as the proxy in front of the app reports it. */
+export function clientIp(req: Request): string | null {
+  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = fwd || req.headers.get("x-real-ip")?.trim() || null;
+  return ip && ip.length <= 64 ? ip : null;
+}
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 const codeHash = (email: string, code: string) => sha256(`${email}:${code}:${process.env.FILE_URL_SECRET ?? process.env.DATABASE_URL ?? ""}`);
@@ -27,14 +44,19 @@ export function normalizeEmail(raw: string): string | null {
 
 export type RequestCodeResult = { ok: true; devCode?: string } | { ok: false; error: string; status: number };
 
-export async function requestCode(email: string): Promise<RequestCodeResult> {
+export async function requestCode(email: string, ip: string | null): Promise<RequestCodeResult> {
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(loginCodes)
     .where(and(eq(loginCodes.email, email), gt(loginCodes.createdAt, sql`now() - interval '1 hour'`)));
   if (n >= CODES_PER_HOUR) return { ok: false, status: 429, error: "Слишком много кодов за час. Попробуйте позже." };
+  if (ip) {
+    const [{ m }] = await db.select({ m: sql<number>`count(*)::int` }).from(loginCodes)
+      .where(and(eq(loginCodes.ip, ip), gt(loginCodes.createdAt, sql`now() - interval '1 hour'`)));
+    if (m >= CODES_PER_IP_HOUR) return { ok: false, status: 429, error: "Слишком много попыток входа с этого адреса. Попробуйте через час." };
+  }
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await db.insert(loginCodes).values({
-    email, codeHash: codeHash(email, code), expiresAt: sql`now() + make_interval(mins => ${CODE_TTL_MIN})`,
+    email, ip, codeHash: codeHash(email, code), expiresAt: sql`now() + make_interval(mins => ${CODE_TTL_MIN})`,
   });
   try {
     await sendLoginCode(email, code);
@@ -49,7 +71,7 @@ export async function requestCode(email: string): Promise<RequestCodeResult> {
 
 export type VerifyResult = { ok: true; user: UserRow; isNew: boolean } | { ok: false; error: string; status: number };
 
-export async function verifyCode(email: string, code: string): Promise<VerifyResult> {
+export async function verifyCode(email: string, code: string, ip: string | null): Promise<VerifyResult> {
   const [row] = await db.select().from(loginCodes)
     .where(and(eq(loginCodes.email, email), isNull(loginCodes.usedAt), gt(loginCodes.expiresAt, sql`now()`)))
     .orderBy(desc(loginCodes.createdAt)).limit(1);
@@ -74,15 +96,23 @@ export async function verifyCode(email: string, code: string): Promise<VerifyRes
     // serialize sign-ups: the very first account adopts the canvases made before accounts existed
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('kaskad:signup'))`);
     const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(users);
-    const [user] = await tx.insert(users).values({ email }).onConflictDoNothing().returning();
+    const [user] = await tx.insert(users).values({ email, signupIp: ip }).onConflictDoNothing().returning();
     if (!user) return { ok: true as const, user: (await tx.select().from(users).where(eq(users.email, email)))[0], isNew: false };
     if (n === 0) {
       await tx.execute(sql`update graphs set owner_id = ${user.id} where owner_id is null`);
       await tx.execute(sql`update jobs set user_id = ${user.id} where user_id is null`);
     }
-    await grantWelcomeBonus(tx, user.id);
+    if (await bonusAllowed(tx, email, ip, user.id)) await grantWelcomeBonus(tx, user.id);
     return { ok: true as const, user, isNew: true };
   });
+}
+
+async function bonusAllowed(tx: Pick<typeof db, "select">, email: string, ip: string | null, userId: string): Promise<boolean> {
+  if (DISPOSABLE.has(email.split("@")[1] ?? "")) return false;
+  if (!ip) return true;
+  const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(users)
+    .where(and(eq(users.signupIp, ip), gt(users.createdAt, sql`now() - interval '30 days'`), sql`${users.id} <> ${userId}`));
+  return n < BONUSES_PER_IP;
 }
 
 export async function startSession(userId: string) {

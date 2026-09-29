@@ -62,6 +62,11 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
   useEffect(() => {
     const payment = new URLSearchParams(window.location.search).get("payment");
     if (payment) void followPayment(payment);
+    // "Пополнить" from pages outside the studio
+    if (new URLSearchParams(window.location.search).get("topup")) {
+      useStudio.getState().setPanel({ billingOpen: true });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     // a tab left open while generations finish elsewhere
     const onFocus = () => void useStudio.getState().refreshBalance();
     window.addEventListener("focus", onFocus);

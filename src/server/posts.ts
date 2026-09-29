@@ -8,7 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { FeedPost } from "@/lib/feed";
 import type { InputRef } from "@/lib/jobs";
 import { getModel } from "@/lib/models/registry";
-import { db, graphs, jobs, outputs, postLikes, posts } from "./db";
+import { db, graphs, jobs, outputs, postLikes, postReports, posts } from "./db";
 import { fileUrl, mimeForKey, newKey, putFile, readStored, storagePath } from "./storage";
 import { imageSize } from "./tools";
 
@@ -54,9 +54,24 @@ async function mediaSize(key: string): Promise<{ width: number; height: number }
   return imageSize(storagePath(key)).catch(() => null);
 }
 
-export async function removePost(postId: string, userId: string): Promise<boolean> {
-  const r = await db.delete(posts).where(and(eq(posts.id, postId), eq(posts.userId, userId))).returning({ id: posts.id });
+/** The author takes a post back; an operator can take down anyone's. */
+export async function removePost(postId: string, userId: string, operator = false): Promise<boolean> {
+  const r = await db.delete(posts).where(operator ? eq(posts.id, postId) : and(eq(posts.id, postId), eq(posts.userId, userId)))
+    .returning({ id: posts.id });
   return r.length > 0;
+}
+
+export const REPORT_REASONS = ["person", "adult", "violence", "rights", "other"] as const;
+/** this many complaints take a post off the wall until an operator looks at it */
+const HIDE_AFTER = 3;
+
+export async function reportPost(postId: string, userId: string, reason: (typeof REPORT_REASONS)[number]): Promise<boolean> {
+  const [p] = await db.select({ id: posts.id, userId: posts.userId }).from(posts).where(eq(posts.id, postId));
+  if (!p || p.userId === userId) return false;
+  await db.insert(postReports).values({ postId, userId, reason }).onConflictDoNothing();
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(postReports).where(eq(postReports.postId, postId));
+  if (n >= HIDE_AFTER) await db.update(posts).set({ hidden: true }).where(eq(posts.id, postId));
+  return true;
 }
 
 /** Your posts, by the result they came from: lets the studio mark what is already shown. */
@@ -65,22 +80,25 @@ export async function myPosts(userId: string): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((r) => [r.outputId, r.id]));
 }
 
-export async function listFeed(userId: string, sort: "top" | "new", offset: number, kind?: "image" | "video"): Promise<FeedPost[]> {
+export async function listFeed(userId: string, sort: "top" | "new", offset: number, kind?: "image" | "video", operator = false): Promise<FeedPost[]> {
   const rows = await db.execute<{
     id: string; kind: "image" | "video"; file_key: string; width: number; height: number; prompt: string | null;
-    model: string; created_at: Date; user_id: string; likes: number; liked: boolean;
+    model: string; created_at: Date; user_id: string; likes: number; liked: boolean; hidden: boolean; reports: number;
   }>(sql`
-    select p.id, p.kind, p.file_key, p.width, p.height, p.prompt, p.model, p.created_at, p.user_id,
+    select p.id, p.kind, p.file_key, p.width, p.height, p.prompt, p.model, p.created_at, p.user_id, p.hidden,
+           (select count(*)::int from post_reports r where r.post_id = p.id) as reports,
            (select count(*)::int from post_likes l where l.post_id = p.id) as likes,
            exists (select 1 from post_likes l where l.post_id = p.id and l.user_id = ${userId}) as liked
     from posts p
-    ${kind ? sql`where p.kind = ${kind}` : sql``}
+    where (not p.hidden or p.user_id = ${userId} or ${operator})
+    ${kind ? sql`and p.kind = ${kind}` : sql``}
     order by ${sort === "top" ? sql`likes desc, p.created_at desc` : sql`p.created_at desc`}
     limit 40 offset ${Math.max(0, Math.min(offset, 10_000))}
   `);
   return rows.map((r) => ({
     id: r.id, kind: r.kind, url: fileUrl(r.file_key), width: r.width, height: r.height, prompt: r.prompt,
     model: r.model, createdAt: new Date(r.created_at).toISOString(), likes: r.likes, liked: r.liked, mine: r.user_id === userId,
+    hidden: r.hidden, reports: operator ? r.reports : 0,
   }));
 }
 

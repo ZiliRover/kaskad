@@ -46,7 +46,7 @@ function providerMessage(data: Json | null): string | null {
  * Provider errors that people actually hit (seen in live runs), rewritten as advice.
  * Checked against the raw provider text, which often embeds another JSON error.
  */
-const KNOWN: { test: RegExp; message: string }[] = [
+const KNOWN: { test: RegExp; message: string; retry?: boolean }[] = [
   {
     test: /PrivacyInformation|may contain real person/i,
     message: "Модель не принимает кадры, похожие на фото реального человека (фильтр приватности провайдера). Возьми стилизованный кадр или другую модель: Kling, Wan, Hailuo.",
@@ -62,6 +62,12 @@ const KNOWN: { test: RegExp; message: string }[] = [
   {
     test: /Only HTTPS URLs are allowed/i,
     message: "Видео и аудио провайдер принимает только по публичной https-ссылке. Задай PUBLIC_BASE_URL у сервера.",
+  },
+  {
+    // the model's own backend failed mid-job (seen with FLUX: "poll returned 422 … corrupted image input" on a text-only prompt)
+    test: /poll returned \d{3}|corrupted image input|upstream (error|failure)/i,
+    message: "Модель дала сбой на своей стороне. Запусти ещё раз; если повторится, выбери другую модель.",
+    retry: true,
   },
   {
     test: /SensitiveContent|content.?(policy|moderation)|safety (system|filter)|flagged/i,
@@ -89,8 +95,8 @@ export function humanize(detail: string | null | undefined): string | null {
 /** Map HTTP failures to messages a user can act on. */
 function failure(status: number, data: Json | null): ProviderError {
   const raw = providerMessage(data);
-  const known = humanize(raw);
-  if (known) return new ProviderError(known);
+  const rule = raw ? KNOWN.find((k) => k.test.test(raw)) : undefined;
+  if (rule) return new ProviderError(rule.message, !!rule.retry);
   const detail = raw ? innerMessage(raw) : null;
   switch (status) {
     case 400: return new ProviderError(`Модель отклонила запрос${detail ? `: ${detail}` : ""}`);

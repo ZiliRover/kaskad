@@ -108,8 +108,10 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
   return (
     <header className="topbar">
       <div className="tb-left">
-        <span className="logo" aria-hidden />
-        <span className="brand">{BRAND.name}</span>
+        <a className="tb-home" href="/studio" title="Все задачи и проекты">
+          <span className="logo" aria-hidden />
+          <span className="brand">{BRAND.name}</span>
+        </a>
         <span className="tb-sep" aria-hidden>/</span>
         <Projects currentId={graphId} initialName={graphName} initial={projects} />
         <Share />
@@ -119,7 +121,7 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
       </div>
       <div className="tb-right">
         {providerMode === "mock" && (
-          <span className="badge badge-warn" title="Провайдер не вызывается: вместо генераций заглушки, баланс списывается по оценке. Для реальных: PROVIDER_MODE=live в .env">
+          <span className="badge badge-warn" title="Демо: нейросети не вызываются, вместо результатов показываются заглушки">
             Тестовый режим
           </span>
         )}

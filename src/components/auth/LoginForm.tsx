@@ -75,6 +75,10 @@ export function LoginForm({ bonusKop, next = "/studio" }: { bonusKop: number; ne
               {busy ? "Отправляем…" : "Получить код"}
             </button>
             {bonusKop > 0 && <p className="auth-note">Новым аккаунтам {formatKop(bonusKop)} на первые генерации.</p>}
+            <p className="auth-legal">
+              Продолжая, вы принимаете <a href="/terms" target="_blank" rel="noreferrer">условия использования</a> и
+              соглашаетесь на обработку данных по <a href="/privacy" target="_blank" rel="noreferrer">политике конфиденциальности</a>.
+            </p>
           </form>
         ) : (
           <form className="auth-form" onSubmit={(e) => { e.preventDefault(); void verify(); }}>

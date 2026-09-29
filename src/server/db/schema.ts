@@ -90,8 +90,10 @@ export type OutputRow = typeof outputs.$inferSelect;
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
+  /** where the account was created from: limits welcome bonuses per address */
+  signupIp: text("signup_ip"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [index("users_signup_ip_idx").on(t.signupIp, t.createdAt)]);
 
 /** Opaque session tokens; only their SHA-256 is stored. */
 export const sessions = pgTable("sessions", {
@@ -110,7 +112,8 @@ export const loginCodes = pgTable("login_codes", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
-}, (t) => [index("login_codes_email_idx").on(t.email, t.createdAt)]);
+  ip: text("ip"),
+}, (t) => [index("login_codes_email_idx").on(t.email, t.createdAt), index("login_codes_ip_idx").on(t.ip, t.createdAt)]);
 
 export const ledgerKind = pgEnum("ledger_kind", ["topup", "bonus", "hold", "release", "charge", "adjust"]);
 
@@ -181,6 +184,8 @@ export const posts = pgTable("posts", {
   height: integer("height").notNull(),
   prompt: text("prompt"),
   model: text("model").notNull(),
+  /** taken off the wall by reports or by an operator; the author still sees it */
+  hidden: boolean("hidden").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("posts_created_idx").on(t.createdAt)]);
 
@@ -190,6 +195,14 @@ export const postLikes = pgTable("post_likes", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("post_likes_post_idx").on(t.postId)]);
+
+/** Complaints about showcase posts, one per person. */
+export const postReports = pgTable("post_reports", {
+  postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.postId, t.userId] })]);
 
 /** The user's library: characters, products, brands and styles to reuse across projects. */
 export const libraryItems = pgTable("library_items", {

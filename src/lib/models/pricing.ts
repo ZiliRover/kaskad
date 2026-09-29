@@ -107,6 +107,9 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
   const refs = ctx.inputCounts.references ?? 0;
   const inLine = lines.find((l) => (l.billable === "input_image" || l.billable === "input_reference") && l.unit === "image");
   if (refs && inLine) usd += refs * inLine.cost_usd;
+  // token-billed reference images: measured on GPT Image 2 (Sep 2026), one 768×1024 reference ≈ 3400 input tokens
+  const inTokens = lines.find((l) => l.billable === "input_image" && l.unit === "token");
+  if (refs && inTokens) { usd += refs * REF_IMAGE_TOKENS * inTokens.cost_usd; approx = true; }
   const perRequestRefs = lines.find((l) => l.billable === "input_reference" && l.unit === "request");
   if (refs && perRequestRefs) usd += perRequestRefs.cost_usd;
   // some models also bill the prompt itself (~4 characters per token)
@@ -114,6 +117,9 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
   if (textLine) { usd += ((ctx.promptChars ?? 400) / 4) * textLine.cost_usd; approx = true; }
   return { usd, approx };
 }
+
+/** input tokens one reference image costs on token-billed image models */
+const REF_IMAGE_TOKENS = 3400;
 
 export function estimate(spec: ModelSpec, ctx: EstimateContext): Estimate {
   const p = spec.pricing;

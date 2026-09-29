@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretLeftIcon, CaretRightIcon, CopyIcon, HeartIcon, XIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon, CopyIcon, FlagIcon, HeartIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BRAND } from "@/config/brand";
 import type { FeedPost } from "@/lib/feed";
@@ -37,7 +37,7 @@ function useAutoplay() {
 
 function Tile({ post, onOpen, onLike, watch }: { post: FeedPost; onOpen: () => void; onLike: () => void; watch: (v: HTMLVideoElement | null) => void }) {
   return (
-    <div className="feed-tile" style={{ aspectRatio: `${post.width} / ${post.height}` }}>
+    <div className={`feed-tile${post.hidden ? " is-hidden" : ""}`} style={{ aspectRatio: `${post.width} / ${post.height}` }}>
       <button type="button" className="feed-open" onClick={onOpen} aria-label={post.prompt ? `Открыть: ${post.prompt.slice(0, 80)}` : "Открыть работу"}>
         {post.kind === "video"
           ? <video ref={watch} src={post.url} muted loop playsInline preload="metadata" />
@@ -55,8 +55,48 @@ function Tile({ post, onOpen, onLike, watch }: { post: FeedPost; onOpen: () => v
   );
 }
 
-function Viewer({ post, onClose, onPrev, onNext, onLike, onRemove }: {
-  post: FeedPost; onClose: () => void; onPrev: (() => void) | null; onNext: (() => void) | null; onLike: () => void; onRemove: () => void;
+const REASONS = [
+  ["person", "Чужое лицо без согласия"],
+  ["adult", "Контент 18+"],
+  ["violence", "Насилие или жестокость"],
+  ["rights", "Нарушает чьи-то права"],
+  ["other", "Другое"],
+] as const;
+
+/** "Пожаловаться": pick a reason, sent once. */
+function Report({ postId }: { postId: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  useEffect(() => { setOpen(false); setState("idle"); }, [postId]);
+  const send = async (reason: string) => {
+    setState("sending");
+    const r = await fetch(`/api/posts/${postId}/report`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }),
+    }).catch(() => null);
+    setState(r?.ok ? "sent" : "error");
+  };
+  if (state === "sent") return <p className="feed-report-done">Жалоба отправлена. Спасибо, посмотрим.</p>;
+  return (
+    <div className="feed-report">
+      {!open ? (
+        <button type="button" className="link-btn" onClick={() => setOpen(true)}><FlagIcon size={12} aria-hidden />Пожаловаться</button>
+      ) : (
+        <>
+          <span className="feed-report-title">Что не так?</span>
+          <div className="feed-report-list">
+            {REASONS.map(([k, l]) => (
+              <button key={k} type="button" className="chip" disabled={state === "sending"} onClick={() => void send(k)}>{l}</button>
+            ))}
+          </div>
+          {state === "error" && <p className="auth-error">Не отправилось, попробуй ещё раз.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Viewer({ post, operator, onClose, onPrev, onNext, onLike, onRemove }: {
+  post: FeedPost; operator: boolean; onClose: () => void; onPrev: (() => void) | null; onNext: (() => void) | null; onLike: () => void; onRemove: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -115,9 +155,14 @@ function Viewer({ post, onClose, onPrev, onNext, onLike, onRemove }: {
             </>
           ) : <p className="feed-hidden">Автор не показал промт.</p>}
         </section>
-        {post.mine && (
+        {post.hidden && (
+          <p className="feed-flagged">{post.mine
+            ? "На работу пожаловались, и её скрыли из витрины до проверки. Её видишь только ты."
+            : "Скрыта из витрины по жалобам."}</p>
+        )}
+        {post.mine || operator ? (
           <div className="feed-mine">
-            <span>Это твоя работа</span>
+            <span>{post.mine ? "Это твоя работа" : `Модерация${post.reports ? ` · жалоб: ${post.reports}` : ""}`}</span>
             {confirmRemove
               ? <span className="feed-confirm">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmRemove(false)}>Отмена</button>
@@ -125,6 +170,8 @@ function Viewer({ post, onClose, onPrev, onNext, onLike, onRemove }: {
                 </span>
               : <button type="button" className="link-btn" onClick={() => setConfirmRemove(true)}>Убрать из витрины</button>}
           </div>
+        ) : (
+          <div className="feed-mine"><Report postId={post.id} /></div>
         )}
       </aside>
     </div>
@@ -138,7 +185,7 @@ function startPlaying(v: HTMLVideoElement | null) {
 }
 
 /** Works people chose to show: a full-screen wall of images and videos, by likes or by date. */
-export function Showcase({ initial }: { initial: FeedPost[] }) {
+export function Showcase({ initial, operator }: { initial: FeedPost[]; operator: boolean }) {
   const [sort, setSort] = useState<Sort>("top");
   const [kind, setKind] = useState<Kind>("all");
   const [posts, setPosts] = useState(initial);
@@ -271,7 +318,7 @@ export function Showcase({ initial }: { initial: FeedPost[] }) {
       <div ref={sentinel} className="feed-sentinel" aria-hidden />
       {loading && posts.length > 0 && <p className="feed-more" role="status">Загружаю ещё…</p>}
 
-      {open && <Viewer post={open} onClose={close} onPrev={prev} onNext={next} onLike={() => void like(open.id)} onRemove={() => void remove(open.id)} />}
+      {open && <Viewer post={open} operator={operator} onClose={close} onPrev={prev} onNext={next} onLike={() => void like(open.id)} onRemove={() => void remove(open.id)} />}
     </div>
   );
 }

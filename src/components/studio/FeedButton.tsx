@@ -88,6 +88,7 @@ export function FeedButton({ outputId, up = false }: { outputId: string; up?: bo
             <>
               <p className="feed-pop-title">Выложить в витрину</p>
               <p className="feed-pop-text">Работу увидят все пользователи. Проект и остальные результаты останутся закрытыми.</p>
+              <p className="feed-pop-text">Нельзя: чужие лица без согласия, 18+, насилие. <a href="/terms#content" target="_blank" rel="noreferrer">Правила</a></p>
               <label className="feed-pop-check">
                 <input type="checkbox" checked={showPrompt} onChange={(e) => setShowPrompt(e.target.checked)} />
                 Показать промт

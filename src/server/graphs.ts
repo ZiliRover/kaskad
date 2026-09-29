@@ -47,6 +47,30 @@ function starterDoc(): GraphDoc {
   };
 }
 
+/** "Оживить фото": a photo and a few words about the motion become a short video. */
+function animateDoc(): GraphDoc {
+  const spec = getModel("alibaba/wan-3.0")!;
+  return {
+    nodes: [
+      { id: "a-note", type: "note", position: { x: 420, y: -180 }, data: {
+        text: "Загрузи фото, опиши движение и нажми «Запустить» на видео. Другую модель можно выбрать в списке слева.",
+        color: "yellow",
+      } },
+      { id: "a-photo", type: "image", position: { x: 0, y: 0 }, data: { fileKey: null, name: "", kind: "image" } },
+      { id: "a-motion", type: "prompt", position: { x: 0, y: 320 }, data: { text: "Лёгкое естественное движение, камера медленно приближается, мягкий свет" } },
+      { id: "a-video", type: "model", position: { x: 420, y: 0 }, data: {
+        kind: "video", modelId: spec.id, prompt: "",
+        params: reconcileParams(spec, { ...defaultParams(spec), aspect_ratio: "9:16", generate_audio: false }),
+      } },
+    ],
+    edges: [
+      { id: "a1", source: "a-photo", sourceHandle: "image", target: "a-video", targetHandle: "first_frame" },
+      { id: "a2", source: "a-motion", sourceHandle: "text", target: "a-video", targetHandle: "prompt" },
+    ],
+    viewport: { x: 120, y: 200, zoom: 0.8 },
+  };
+}
+
 /** The canvas a user opens: their most recently edited one, created on first visit. */
 export async function userGraph(userId: string) {
   const [row] = await db.select().from(graphs).where(and(eq(graphs.ownerId, userId), isNull(graphs.appId)))
@@ -89,8 +113,8 @@ const EMPTY_DOC: GraphDoc = { nodes: [], edges: [], viewport: { x: 80, y: 80, zo
  * A new canvas: empty, the starter chain, or a copy of one of the user's canvases.
  * A copy takes the graph, not its results: picks of specific results are dropped.
  */
-export async function createProject(userId: string, opts: { name?: string; from?: "empty" | "starter"; copyOf?: string }) {
-  let doc: GraphDoc = opts.from === "starter" ? starterDoc() : EMPTY_DOC;
+export async function createProject(userId: string, opts: { name?: string; from?: "empty" | "starter" | "animate"; copyOf?: string; doc?: GraphDoc }) {
+  let doc: GraphDoc = opts.doc ?? (opts.from === "starter" ? starterDoc() : opts.from === "animate" ? animateDoc() : EMPTY_DOC);
   let name = opts.name?.trim() || "Новый проект";
   if (opts.copyOf) {
     const src = await ownedGraph(opts.copyOf, userId);

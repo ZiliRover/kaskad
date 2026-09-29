@@ -25,6 +25,8 @@
 
 ## What it does
 
+- **Start from a task, not a graph.** After sign-in people pick what they want: marketplace cards, a video from an idea, an animated photo, or an empty canvas. Recent projects sit below.
+- **Marketplace cards without the canvas.** A product photo and a description become an editable plan of 5-10 slides (the texts are shown before anything is paid), then the finished set for Wildberries or Ozon at 900x1200, one ZIP. Underneath it is an ordinary project that opens in the editor.
 - **Every OpenRouter video and image model on one canvas.** 28 video models (Seedance, Veo, Kling, Sora, Wan, Hailuo, Runway…), 53 image models (Nano Banana, GPT Image, Seedream, FLUX, Recraft…) and a few text models for writing prompts.
 - **Nodes show exactly what a model accepts.** First and last frame, image references, video and audio references for Seedance 2, a source video for edit and upscale models. Required inputs are marked; wires only connect matching types.
 - **Price before you run, pay in rubles.** Every node shows its price in rubles at the daily Central Bank rate. A run reserves its estimate from the prepaid balance and is charged what the provider actually billed; failed generations cost nothing.
@@ -113,6 +115,7 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 
 ## Using the studio
 
+- **Start screen:** `/studio` shows the tasks and recent projects; the logo in the editor leads back to it. `/make/cards` is the canvas-free cards flow.
 - **Add a model:** drag it from the left panel onto the canvas. Search by name or filter by what you need: frames, references, video/audio references, sound, variants.
 - **Swap a model:** drag another model of the same kind onto an existing node. Wires and compatible settings are kept.
 - **Bring your files:** drop images, videos or audio anywhere on the canvas, or paste them with <kbd>Ctrl</kbd>+<kbd>V</kbd>.
@@ -174,7 +177,10 @@ This is the core of the product. A live run on real models (GPT Image 2 → Seed
 - **Video and audio inputs need a public https server address.** Providers accept them only as links, not inline files; without `PUBLIC_BASE_URL` those runs stop before anything is billed.
 - **Payments are wired, not yet live.** YooKassa needs a shop (self-employed status works) and a public https address for the webhook; until then top-ups run through the test checkout. Receipts for "Мой налог" come from YooKassa's own integration.
 - **Reference limits for video models are estimates.** OpenRouter doesn't publish them; providers report an error on the node if a limit is exceeded.
-- **Graph saves are last-write-wins.** Two open tabs of the same graph can overwrite each other.
+- **Marketplace cards, live:** 11 products (phone-style photos, one worn by a person), 77 slides on GPT Image 2: every slide rendered, Russian text clean, the product and the person kept across a set. A slide costs about $0.06 at provider prices (the reference photo is billed as ~3400 input tokens, now in the estimate); a set of 7 takes 2.5-5 minutes with four jobs at a time (`WORKER_CONCURRENCY`). The first run showed the planner inventing sizes and the image model adding its own labels; the planner now uses only facts from the description and forbids any other text on the image.
+- **Abuse limits are basic.** Login codes are limited per email and per IP, the welcome bonus is skipped for throwaway mail and after 3 accounts per IP in 30 days. The IP comes from `X-Forwarded-For`, so production needs a proxy that sets it.
+- **Showcase moderation is reactive.** Three complaints hide a post until an operator looks; operators can remove any post from the viewer. Prompts are not filtered before generation beyond what the providers refuse.
+- **Terms and privacy are drafts.** `/terms` and `/privacy` read the provider's details from `LEGAL_NAME`, `LEGAL_INN` and `SUPPORT_EMAIL`; have a lawyer check them before taking payments.
 
 Next up: hosting (a server abroad for Google models, S3 storage, public https) and the closed beta. The product plan (in Russian) is in [PRODUCT.md](./PRODUCT.md).
 

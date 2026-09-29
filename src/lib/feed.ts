@@ -12,4 +12,8 @@ export interface FeedPost {
   likes: number;
   liked: boolean;
   mine: boolean;
+  /** off the wall after complaints: only the author and operators see it */
+  hidden: boolean;
+  /** complaints so far, shown to operators only */
+  reports: number;
 }

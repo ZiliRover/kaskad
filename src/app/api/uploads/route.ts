@@ -20,6 +20,22 @@ const ACCEPTED: Record<string, { kind: "image" | "video" | "audio"; max: number 
 };
 const LIMIT_TEXT = { image: "20 МБ", video: "50 МБ", audio: "20 МБ" };
 
+/** The file really is what the browser says it is: checked by its first bytes. */
+function looksLike(mime: string, b: Uint8Array): boolean {
+  const ascii = (at: number, s: string) => [...s].every((c, i) => b[at + i] === c.charCodeAt(0));
+  switch (mime) {
+    case "image/png": return b[0] === 0x89 && ascii(1, "PNG");
+    case "image/jpeg": return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case "image/webp": return ascii(0, "RIFF") && ascii(8, "WEBP");
+    case "video/mp4": case "audio/mp4": case "audio/x-m4a": return ascii(4, "ftyp");
+    case "video/webm": return b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3;
+    case "audio/mpeg": return ascii(0, "ID3") || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0);
+    case "audio/wav": case "audio/x-wav": return ascii(0, "RIFF") && ascii(8, "WAVE");
+    case "audio/ogg": return ascii(0, "OggS");
+    default: return false;
+  }
+}
+
 export async function POST(req: Request) {
   const { user, deny } = await requireUser();
   if (deny) return deny;
@@ -39,8 +55,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Файл больше ${LIMIT_TEXT[rule.kind]}` }, { status: 413 });
   }
 
+  const data = new Uint8Array(await file.arrayBuffer());
+  if (!looksLike(file.type, data)) {
+    return NextResponse.json({ error: "Файл повреждён или это не тот формат, что указан в названии" }, { status: 415 });
+  }
   const key = newKey(`uploads/${user.id}`, file.type);
-  await putFile(key, new Uint8Array(await file.arrayBuffer()));
+  await putFile(key, data);
   await recordUpload(user.id, key, file.name, rule.kind);
   return NextResponse.json({ key, url: fileUrl(key), kind: rule.kind });
 }

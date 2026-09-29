@@ -77,6 +77,15 @@ export function Agent() {
   const [uploading, setUploading] = useState(false);
   const [video, setVideo] = useState<VideoForm>({ seconds: 15, aspect: "9:16", voice: VOICES[0][0], subtitles: true, music: false, quality: "draft" });
 
+  // "Ролик по идее" on the start screen lands here with ?open=director
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("open") !== "director") return;
+    setMode("video");
+    setOpen(true);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) setOpen(false); };

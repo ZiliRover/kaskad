@@ -92,6 +92,13 @@
       "when": 1790692091741,
       "tag": "0012_drop_app_showcase",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790696168363,
+      "tag": "0013_protection",
+      "breakpoints": true
     }
   ]
 }

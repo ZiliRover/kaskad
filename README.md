@@ -29,13 +29,20 @@
 - **Nodes show exactly what a model accepts.** First and last frame, image references, video and audio references for Seedance 2, a source video for edit and upscale models. Required inputs are marked; wires only connect matching types.
 - **Price before you run, pay in rubles.** Every node shows its price in rubles at the daily Central Bank rate. A run reserves its estimate from the prepaid balance and is charged what the provider actually billed; failed generations cost nothing.
 - **Sign in with an email code.** No passwords. Every account has its own canvas, files and balance, tops up by card through YooKassa, and gets a welcome bonus to try things.
+- **From an idea to a finished video.** The Director writes a scene-by-scene script and builds the whole pipeline: frames, scene videos, a montage timeline (reorder, trim, fades), voice-over, music and Reels-style subtitles recognised from the speech.
+- **Marketplace card sets.** A product photo and a description become 5-10 slides in one style, fitted to Wildberries or Ozon (3:4, 900x1200, JPEG) and downloadable as one ZIP.
+- **Quality autopilot.** A vision model scores variants against your criteria, passes on the best one and regenerates when nothing clears the bar.
+- **Draft, then final.** One switch runs everything at the cheapest settings to check an idea; switch off for the final.
+- **Library.** Save characters, products, brands and styles once; drop them into any project and their photos and description go into the models.
+- **Team work.** Share a project with editors and viewers, see each other's cursors and edits live, leave comments right on the canvas. A media library holds everything from every project.
+- **Showcase.** Published apps can go on a public showcase where people find them and like them.
 - **Batches.** A List node holds up to 50 prompts or files; every model it feeds runs once per item, and the chain after it follows item by item. Twenty product photos become twenty cards and twenty videos with one click.
 - **Describe it, get a graph.** The agent turns a sentence ("vertical WB video from my photo with a -30% caption") into a checked chain of models, prompts and tools, with the price shown before anything runs.
 - **Apps from graphs.** Publish a project as a simple form: pick which inputs people fill in and which results they get, share the link. Runners pay for their own runs and never see the graph.
 - **Compare models.** Copy a node onto three other models with the same inputs, run them, and see the results side by side with what each cost.
-- **Voiceover.** Russian speech with MiniMax and Grok voices, or any voice cloned from a short sample, straight into "sound on video".
+- **Voice and music.** Russian speech with MiniMax and Grok voices, any voice cloned from a short sample, and music from Lyria.
 - **Variants, versions, and what flows next.** Generate up to 4 images at once, click the best one, and that is what the next node receives. Older results stay browsable.
-- **Editing without an editor.** Free ffmpeg tools: last frame, join, trim, speed, sound on video, reframe to 9:16 / 3:4 / 1:1, text over images and videos.
+- **Editing without an editor.** Free ffmpeg tools: montage timeline, last frame, join, trim, speed, sound on video, reframe to 9:16 / 3:4 / 1:1, text over images and videos, marketplace fitting; subtitles from speech (Whisper).
 - **A studio, not a demo.** Projects, templates, a results gallery you can drag back onto the canvas, prompt improvement and translation, notes and groups, copy/paste, undo for deletions, drop or paste files from your computer.
 
 ## Why it's built this way
@@ -96,7 +103,7 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `ADMIN_EMAILS` | | operators: generate without a balance limit and see the OpenRouter balance instead of their own |
 | `PRICE_MARKUP` | `1.5` | user price = provider cost × Central Bank rate × markup |
 | `WELCOME_BONUS_RUB` | `50` | credited once to each new account |
-| `OVERLAY_FONT` | system bold font | TTF with Cyrillic for text-on-image/video tools |
+| `OVERLAY_FONT` / `OVERLAY_FONT_FAMILY` | system bold font | TTF with Cyrillic for text and subtitles, and its family name if it isn't Arial, Segoe UI or DejaVu Sans |
 | `SMTP_URL` / `MAIL_FROM` | | mail for login codes (`smtps://user:pass@host:465`); without it, dev prints codes to the console |
 | `PAYMENTS_PROVIDER` | `test` in dev | `yookassa` for real payments; webhook: `<APP_URL>/api/payments/webhook` |
 | `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY` | | YooKassa shop credentials |

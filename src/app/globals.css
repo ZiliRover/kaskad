@@ -1308,3 +1308,46 @@ button.side-title:hover { color: var(--text-2); }
 .peer-more { background: var(--panel-3); color: var(--text-2); }
 .peer-cursor { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1000; display: flex; align-items: flex-start; gap: 2px; transition: transform .12s linear; }
 .peer-name { margin-top: 14px; padding: 1px 6px; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- comments */
+
+.react-flow.is-commenting .react-flow__pane { cursor: crosshair; }
+.comments-btn { position: relative; }
+.comments-btn.is-on { color: var(--accent-strong); background: var(--accent-soft); }
+.comments-count {
+  position: absolute; top: -3px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+}
+.comments-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+.comment-pin {
+  position: absolute; transform: translate(-4px, -100%); pointer-events: auto;
+  width: 28px; height: 28px; border-radius: 50% 50% 50% 4px; border: 2px solid var(--bg);
+  display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; box-shadow: var(--shadow-pop);
+}
+.comment-pin.is-resolved { opacity: .5; }
+.comment-pin.is-open { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+.comment-pin.is-draft { position: static; transform: none; background: var(--accent); }
+.comment-pin-n {
+  position: absolute; bottom: -6px; right: -8px; min-width: 15px; height: 15px; border-radius: 999px; padding: 0 3px;
+  background: var(--panel); color: var(--text); font-size: 9.5px; line-height: 15px; border: 1px solid var(--line-2);
+}
+.comment-pop { position: absolute; pointer-events: auto; display: flex; gap: 8px; align-items: flex-start; transform: translate(-4px, -28px); }
+.comment-pop > .comment-card { margin-left: 32px; }
+.comment-pop > .comment-pin.is-draft + .comment-card { margin-left: 0; }
+.comment-card {
+  width: 280px; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-card);
+  background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop);
+}
+.comment-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.comment-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 650; color: var(--text-2); }
+.comment-tools { display: flex; gap: 2px; }
+.comment-list { list-style: none; display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
+.comment-list li { display: flex; gap: 8px; }
+.comment-meta { font-size: 11px; color: var(--text-3); }
+.comment-text { font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-reply { display: flex; gap: 6px; align-items: center; }
+.comment-reply .field { height: 30px; }
+.comment-hint {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line-2); font-size: 12px; color: var(--text-2); box-shadow: var(--shadow);
+}

@@ -9,6 +9,7 @@ import { getModel } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
 import { canConnect, outputType, remember, useStudio, type StudioNode } from "./store";
 import { FlowEdge } from "./FlowEdge";
+import { CommentsLayer } from "./Comments";
 import { LiveChannel, PeerCursors } from "./Live";
 import { useTheme } from "./theme";
 import { mediaFiles } from "./upload";
@@ -72,6 +73,7 @@ export function Canvas() {
   const nodes = useStudio((s) => s.nodes);
   const edges = useStudio((s) => s.edges);
   const viewport = useStudio((s) => s.viewport);
+  const commentMode = useStudio((s) => s.commentMode);
   const theme = useTheme((s) => s.resolved);
   const { onNodesChange, onEdgesChange, onConnect, setViewport, addNode, addFiles, setModel, setUpload, updateData, toast } = useStudio.getState();
   const { screenToFlowPosition } = useReactFlow();
@@ -159,6 +161,13 @@ export function Canvas() {
       }}
       onDragLeave={(e) => { if (e.target === e.currentTarget) highlight(null); }}
       onDrop={onDrop}
+      onPaneClick={(e) => {
+        const s = useStudio.getState();
+        if (s.openThread) useStudio.setState({ openThread: null });
+        if (!s.commentMode) return;
+        useStudio.setState({ draftPin: screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
+      }}
+      className={commentMode ? "is-commenting" : undefined}
       deleteKeyCode={["Delete", "Backspace"]}
       multiSelectionKeyCode={["Shift", "Meta", "Control"]}
       minZoom={0.2}
@@ -169,6 +178,7 @@ export function Canvas() {
     >
       <LiveChannel />
       <PeerCursors />
+      <CommentsLayer />
       <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--grid-dot)" />
       <Controls showInteractive={false} position="bottom-left" />
       <MiniMap

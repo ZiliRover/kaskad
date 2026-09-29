@@ -8,6 +8,7 @@ import { create } from "zustand";
 import type { AssetData, GraphDoc, GroupData, ImageData, ListData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
 import type { LibraryItem } from "@/lib/library";
 import type { Peer } from "./Live";
+import type { Comment } from "@/lib/comments";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { liftInlinePrompts } from "@/lib/graph/lift";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
@@ -74,6 +75,11 @@ export interface StudioStore {
   peers: Record<string, Peer>;
   /** bumps when comments change somewhere */
   commentsRev: number;
+  comments: Comment[];
+  /** clicking the canvas places a comment */
+  commentMode: boolean;
+  openThread: string | null;
+  draftPin: { x: number; y: number } | null;
   library: LibraryItem[];
   /** library item open in the editor ("new" = creating one) */
   libraryEdit: LibraryItem | "new" | null;
@@ -412,6 +418,10 @@ export const useStudio = create<StudioStore>((set, get) => ({
   me: null,
   peers: {},
   commentsRev: 0,
+  comments: [],
+  commentMode: false,
+  openThread: null,
+  draftPin: null,
   library: [],
   libraryEdit: null,
   libraryPrefill: null,

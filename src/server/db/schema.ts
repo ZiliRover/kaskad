@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  bigint, boolean, doublePrecision, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { AppField } from "@/lib/apps";
@@ -216,6 +216,19 @@ export const graphInvites = pgTable("graph_invites", {
   role: text("role").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.graphId, t.email] }), index("graph_invites_email_idx").on(t.email)]);
+
+/** Comments pinned to a spot on the canvas; replies point to their thread. */
+export const graphComments = pgTable("graph_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  graphId: text("graph_id").notNull().references(() => graphs.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id"),
+  x: doublePrecision("x").notNull().default(0),
+  y: doublePrecision("y").notNull().default(0),
+  text: text("text").notNull(),
+  resolved: boolean("resolved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("graph_comments_graph_idx").on(t.graphId, t.createdAt)]);
 
 export type UserRow = typeof users.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;

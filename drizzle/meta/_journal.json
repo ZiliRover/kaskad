@@ -71,6 +71,13 @@
       "when": 1790690250605,
       "tag": "0009_members",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790690872903,
+      "tag": "0010_comments",
+      "breakpoints": true
     }
   ]
 }

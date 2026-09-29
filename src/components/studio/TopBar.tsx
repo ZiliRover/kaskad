@@ -9,6 +9,7 @@ import { formatKop, formatUsd } from "@/lib/money";
 import type { ProjectSummary } from "@/lib/projects";
 import { Agent } from "./Agent";
 import { Projects } from "./Projects";
+import { CommentsButton } from "./Comments";
 import { PeerAvatars } from "./Live";
 import { Share } from "./Share";
 import { isActive, useStudio } from "./store";
@@ -113,6 +114,7 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
         <Projects currentId={graphId} initialName={graphName} initial={projects} />
         <Share />
         <PeerAvatars />
+        <CommentsButton />
         {role === "viewer" && <span className="badge" title="Тебя пригласили зрителем: изменения не сохраняются">Просмотр</span>}
       </div>
       <div className="tb-right">

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/auth";
+import { recordUpload } from "@/server/media";
 import { fileUrl, newKey, putFile } from "@/server/storage";
 
 const MB = 1024 * 1024;
@@ -40,5 +41,6 @@ export async function POST(req: Request) {
 
   const key = newKey(`uploads/${user.id}`, file.type);
   await putFile(key, new Uint8Array(await file.arrayBuffer()));
+  await recordUpload(user.id, key, file.name, rule.kind);
   return NextResponse.json({ key, url: fileUrl(key), kind: rule.kind });
 }

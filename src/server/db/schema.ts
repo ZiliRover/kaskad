@@ -178,5 +178,15 @@ export const libraryItems = pgTable("library_items", {
 }, (t) => [index("library_owner_idx").on(t.ownerId, t.updatedAt)]);
 
 export type LibraryRow = typeof libraryItems.$inferSelect;
+
+/** Files people uploaded, for the media library (the files themselves live in storage). */
+export const uploads = pgTable("uploads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fileKey: text("file_key").notNull().unique(),
+  name: text("name").notNull().default(""),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("uploads_owner_idx").on(t.ownerId, t.createdAt)]);
 export type UserRow = typeof users.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;

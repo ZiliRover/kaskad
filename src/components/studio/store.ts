@@ -69,6 +69,8 @@ export interface StudioStore {
   library: LibraryItem[];
   /** library item open in the editor ("new" = creating one) */
   libraryEdit: LibraryItem | "new" | null;
+  /** photos to start a new library item with (from the media library) */
+  libraryPrefill: string[] | null;
   /** draft mode: runs use the cheapest settings of every model */
   draft: boolean;
   setDraft(on: boolean): void;
@@ -311,6 +313,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   publishOpen: false,
   library: [],
   libraryEdit: null,
+  libraryPrefill: null,
   draft: false,
 
   setDraft(on) {

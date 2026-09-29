@@ -35,7 +35,8 @@ export function LibraryDialog() {
     if (!editing) return;
     const item = editing === "new" ? null : editing;
     setKind(item?.kind ?? "character"); setName(item?.name ?? ""); setDescription(item?.description ?? "");
-    setFiles(item?.files ?? []); setError(null);
+    setFiles(item?.files ?? useStudio.getState().libraryPrefill ?? []); setError(null);
+    useStudio.setState({ libraryPrefill: null });
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") useStudio.setState({ libraryEdit: null }); };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);

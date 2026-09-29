@@ -729,7 +729,7 @@ button.side-title:hover { color: var(--text-2); }
 /* ---------------------------------------------------------------- gallery */
 
 .gallery {
-  flex: none; width: 300px;
+  flex: none; width: 340px;
   display: flex; flex-direction: column; gap: 10px;
   padding: 14px 12px;
   border-left: 1px solid var(--line);
@@ -1233,3 +1233,20 @@ button.side-title:hover { color: var(--text-2); }
 .asset-toggle input { accent-color: var(--accent); }
 .library-row { display: block; }
 .library-row .library-item { width: 100%; }
+.gallery-tabs { margin: 0 14px 8px; }
+.gallery-tabs button { flex: 1; padding: 5px 6px; font-size: 12px; }
+.gallery-search { margin: 0 14px 8px; }
+.gallery-cap { display: flex; flex-direction: column; min-width: 0; }
+.gallery-sub { font-size: 10.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-save {
+  display: inline-flex; align-items: center; gap: 5px; margin: 0 8px 8px; padding: 3px 8px; border-radius: 6px;
+  font-size: 11.5px; color: var(--text-2); border: 1px solid var(--line);
+}
+.gallery-save:hover { color: var(--accent-strong); border-color: var(--accent-line); }
+.gallery-tabs, .gallery-search { margin: 0; }
+.gallery-tabs { flex-wrap: nowrap; }
+.gallery-tabs button { white-space: nowrap; font-size: 11.5px; padding: 5px 4px; }
+.gallery-item figcaption { flex-direction: column; gap: 1px; }
+.gallery-item figcaption > span:last-child { font-size: 10px; }
+.gallery-cap { font-size: 11px; color: var(--text-2); }
+.gallery-save { white-space: nowrap; align-self: flex-start; margin: 4px 0 2px; }

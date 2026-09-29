@@ -123,11 +123,11 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
           type="button"
           className={`btn btn-ghost${galleryOpen ? " is-on" : ""}`}
           aria-pressed={galleryOpen}
-          aria-label="Результаты"
-          title="Все результаты этого холста"
+          aria-label="Медиатека"
+          title="Результаты и загрузки всех проектов"
           onClick={() => setPanel({ galleryOpen: !galleryOpen })}
         >
-          <ImagesSquareIcon size={15} aria-hidden /><span className="tb-label">Результаты</span>
+          <ImagesSquareIcon size={15} aria-hidden /><span className="tb-label">Медиатека</span>
         </button>
         <button
           type="button"

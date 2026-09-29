@@ -5,7 +5,8 @@ import {
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange, type Viewport,
 } from "@xyflow/react";
 import { create } from "zustand";
-import type { GraphDoc, GroupData, ImageData, ListData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
+import type { AssetData, GraphDoc, GroupData, ImageData, ListData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
+import type { LibraryItem } from "@/lib/library";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { liftInlinePrompts } from "@/lib/graph/lift";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
@@ -20,8 +21,9 @@ export type ImageNodeT = Node<ImageData, "image">;
 export type ModelNodeT = Node<ModelData, "model">;
 export type NoteNodeT = Node<NoteData, "note">;
 export type ListNodeT = Node<ListData, "list">;
+export type AssetNodeT = Node<AssetData, "asset">;
 export type GroupNodeT = Node<GroupData, "group">;
-export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT | ListNodeT;
+export type StudioNode = PromptNodeT | ImageNodeT | ModelNodeT | NoteNodeT | GroupNodeT | ListNodeT | AssetNodeT;
 
 export interface Toast { id: number; text: string; error?: boolean; action?: { label: string; run: () => void } }
 export interface Account {
@@ -64,6 +66,9 @@ export interface StudioStore {
   /** nodes shown side by side in the compare view; empty = closed */
   compareIds: string[];
   publishOpen: boolean;
+  library: LibraryItem[];
+  /** library item open in the editor ("new" = creating one) */
+  libraryEdit: LibraryItem | "new" | null;
   /** draft mode: runs use the cheapest settings of every model */
   draft: boolean;
   setDraft(on: boolean): void;
@@ -74,7 +79,7 @@ export interface StudioStore {
   onConnect(c: Connection): void;
   setViewport(v: Viewport): void;
   /** Adds a node and returns its id. exact: keep the position (drop at cursor); otherwise nudge to free space */
-  addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean; listKind?: ListData["kind"] }): string;
+  addNode(type: StudioNode["type"], position: { x: number; y: number }, opts?: { kind?: MediaKind; modelId?: string; exact?: boolean; listKind?: ListData["kind"]; assetId?: string }): string;
   /** Create a Prompt node left of a model node and wire it into its prompt input */
   addPromptFor(nodeId: string): void;
   /** Upload files and place one upload node per file, fanned out from `at` */
@@ -148,6 +153,7 @@ export function outputType(n: StudioNode): DType | null {
   if (n.type === "prompt") return "text";
   if (n.type === "image") return n.data.kind ?? "image";
   if (n.type === "list") return n.data.kind;
+  if (n.type === "asset") return n.data.files.length ? "image" : "text";
   if (n.type === "model") return n.data.kind;
   return null;
 }
@@ -303,6 +309,8 @@ export const useStudio = create<StudioStore>((set, get) => ({
   billingOpen: false,
   compareIds: [],
   publishOpen: false,
+  library: [],
+  libraryEdit: null,
   draft: false,
 
   setDraft(on) {
@@ -401,6 +409,11 @@ export const useStudio = create<StudioStore>((set, get) => ({
     else if (type === "image") node = { id, type, position, data: { fileKey: null, name: "", kind: "image" } };
     else if (type === "note") node = { id, type, position, data: { text: "", color: "yellow" } };
     else if (type === "group") node = { id, type, position, data: { title: "Группа", width: 720, height: 420 } };
+    else if (type === "asset") {
+      const item = get().library.find((l) => l.id === opts.assetId);
+      if (!item) return "";
+      node = { id, type, position, data: { assetId: item.id, kind: item.kind, name: item.name, text: item.description, files: item.files, addText: true } };
+    }
     else if (type === "list") {
       node = opts.listKind && opts.listKind !== "text"
         ? { id, type, position, data: { kind: opts.listKind, files: [] } }

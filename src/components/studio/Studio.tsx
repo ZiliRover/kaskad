@@ -9,6 +9,7 @@ import type { Fx } from "@/lib/money";
 import type { ProjectSummary } from "@/lib/projects";
 import { formatKop } from "@/lib/money";
 import { AppPublish } from "./AppPublish";
+import { LibraryDialog, loadLibrary } from "./Library";
 import { Billing } from "./Billing";
 import { Canvas } from "./Canvas";
 import { CompareView, SelectionBar } from "./Compare";
@@ -65,6 +66,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
     return () => window.removeEventListener("focus", onFocus);
   }, []);
   useEffect(() => useTheme.getState().init(), []);
+  useEffect(() => { void loadLibrary(); }, []);
 
   return (
     <ReactFlowProvider>
@@ -81,6 +83,7 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
       <Billing />
       <CompareView />
       <AppPublish graphId={graphId} projectName={graphName} />
+      <LibraryDialog />
       <Toasts />
       <ConfirmDialog />
       <Lightbox />

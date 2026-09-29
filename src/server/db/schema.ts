@@ -164,5 +164,19 @@ export const apps = pgTable("apps", {
 }, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt)]);
 
 export type AppRow = typeof apps.$inferSelect;
+
+/** The user's library: characters, products, brands and styles to reuse across projects. */
+export const libraryItems = pgTable("library_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  files: jsonb("files").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("library_owner_idx").on(t.ownerId, t.updatedAt)]);
+
+export type LibraryRow = typeof libraryItems.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;

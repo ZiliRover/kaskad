@@ -70,6 +70,8 @@ export async function publishApp(userId: string, graphId: string, input: {
     if (n.type === "image" && n.data.fileKey) nodes.push({ ...n, data: { ...n.data, fileKey: await copyFile(n.data.fileKey, id) } });
     else if (n.type === "list" && n.data.kind !== "text") {
       nodes.push({ ...n, data: { ...n.data, files: await Promise.all((n.data.files ?? []).map((k) => copyFile(k, id))) } });
+    } else if (n.type === "asset") {
+      nodes.push({ ...n, data: { ...n.data, files: await Promise.all(n.data.files.map((k) => copyFile(k, id))) } });
     } else nodes.push(n);
   }
   const doc: GraphDoc = { nodes, edges: graph.doc.edges, viewport: graph.doc.viewport };

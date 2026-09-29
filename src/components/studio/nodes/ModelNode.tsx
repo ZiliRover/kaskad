@@ -51,7 +51,12 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
   const active = useStudio((s) => isActive(s.state, id));
   const submitting = useStudio((s) => !!s.submitting[id]);
   const localError = useStudio((s) => s.localErrors[id]);
-  const wired = useStudio(useShallow((s) => s.edges.filter((e) => e.target === id).map((e) => e.targetHandle ?? "")));
+  // one entry per input item: a library item brings all its photos
+  const wired = useStudio(useShallow((s) => s.edges.filter((e) => e.target === id).flatMap((e) => {
+    const src = s.nodes.find((n) => n.id === e.source);
+    const n = src?.type === "asset" && src.data.files.length ? src.data.files.length : 1;
+    return Array.from({ length: n }, () => e.targetHandle ?? "");
+  })));
   // prompt length drives the price of text models; a model's text output counts as a typical prompt
   const promptChars = useStudio((s) => s.edges
     .filter((e) => e.target === id && e.targetHandle === "prompt")

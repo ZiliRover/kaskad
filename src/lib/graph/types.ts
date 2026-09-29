@@ -42,6 +42,21 @@ export const listData = z.object({
   files: z.array(z.string().max(300)).max(LIST_MAX).optional(),
 });
 
+/**
+ * A saved character, product, brand or style from the user's library: reference photos
+ * go into image inputs, and the description is added to the connected model's prompt.
+ */
+export const ASSET_KINDS = ["character", "product", "brand", "style"] as const;
+export const assetData = z.object({
+  assetId: z.string().uuid().optional(),
+  kind: z.enum(ASSET_KINDS),
+  name: z.string().max(80),
+  text: z.string().max(4000),
+  files: z.array(z.string().max(300)).max(9),
+  /** add the description to the prompt of models this feeds */
+  addText: z.boolean().default(true),
+});
+
 /** Canvas annotations: no inputs or outputs, never executed. */
 export const NOTE_COLORS = ["yellow", "blue", "pink", "green", "gray"] as const;
 export const noteData = z.object({
@@ -62,6 +77,7 @@ export const graphNode = z.discriminatedUnion("type", [
   z.object({ id, type: z.literal("image"), position, data: imageData }),
   z.object({ id, type: z.literal("model"), position, data: modelData }),
   z.object({ id, type: z.literal("list"), position, data: listData }),
+  z.object({ id, type: z.literal("asset"), position, data: assetData }),
   z.object({ id, type: z.literal("note"), position, data: noteData }),
   z.object({ id, type: z.literal("group"), position, data: groupData }),
 ]);
@@ -84,6 +100,7 @@ export type PromptData = z.infer<typeof promptData>;
 export type ImageData = z.infer<typeof imageData>;
 export type ModelData = z.infer<typeof modelData>;
 export type ListData = z.infer<typeof listData>;
+export type AssetData = z.infer<typeof assetData>;
 export type NoteData = z.infer<typeof noteData>;
 export type GroupData = z.infer<typeof groupData>;
 export type GraphNode = z.infer<typeof graphNode>;
@@ -98,6 +115,8 @@ export function outputHandle(node: GraphNode): DType | null {
   if (node.type === "image") return node.data.kind ?? "image";
   if (node.type === "model") return node.data.kind;
   if (node.type === "list") return node.data.kind;
+  // photos when there are any; a text-only brand gives its description
+  if (node.type === "asset") return node.data.files.length ? "image" : "text";
   return null;
 }
 

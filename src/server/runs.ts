@@ -29,7 +29,8 @@ export async function createRun(
   // a document may only feed the worker files its author can read
   for (const n of doc.nodes) {
     const keys = n.type === "image" && n.data.fileKey ? [n.data.fileKey]
-      : n.type === "list" && n.data.kind !== "text" ? n.data.files ?? [] : [];
+      : n.type === "list" && n.data.kind !== "text" ? n.data.files ?? []
+      : n.type === "asset" ? n.data.files : [];
     for (const key of keys) {
       if (!(await canReadFile(key, userId))) {
         return { ok: false, nodeId: n.id, error: "Файл недоступен. Загрузите его заново." };

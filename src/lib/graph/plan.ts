@@ -155,6 +155,12 @@ export function planRun(opts: PlanOptions): PlanResult {
             refs.push(listRef(src, i, nodeId));
             continue;
           }
+          if (src.type === "asset") {
+            // as many reference photos as the input still takes; the description rides along with the prompt
+            if (port.dtype === "text") refs.push({ type: "text", text: src.data.text });
+            else for (const key of src.data.files.slice(0, Math.max(0, port.max - refs.length))) refs.push({ type: "file", key });
+            continue;
+          }
           const srcFan = src.type === "model" ? fans.get(src.id) ?? 0 : 0;
           if (srcFan && port.max === 1) {
             refs.push({ type: "node", nodeId: src.id, item: i }); // item by item
@@ -177,6 +183,15 @@ export function planRun(opts: PlanOptions): PlanResult {
             ? `Подключи вход «${port.label}»: без него модель не работает`
             : `Подключи минимум ${port.min} во вход «${port.label}»`);
         }
+      }
+
+      // library items connected to image inputs add their description to the prompt
+      const described = doc.edges
+        .filter((e) => e.target === nodeId)
+        .map((e) => byId.get(e.source))
+        .filter((s): s is Extract<GraphNode, { type: "asset" }> => s?.type === "asset" && s.data.addText && !!s.data.text.trim() && outputHandle(s) !== "text");
+      if (described.length && spec.inputs.some((p) => p.key === "prompt")) {
+        ports.prompt = [...(ports.prompt ?? []), ...described.map((s) => ({ type: "text" as const, text: `${s.data.name}: ${s.data.text.trim()}` }))];
       }
 
       if (!ports.prompt) {

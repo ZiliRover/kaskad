@@ -1,6 +1,7 @@
 "use client";
 
-import { CaretRightIcon, MagnifyingGlassIcon, XIcon } from "@phosphor-icons/react";
+import { BookmarkSimpleIcon, CaretRightIcon, MagnifyingGlassIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
+import { LibraryRow } from "./Library";
 import { useReactFlow } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRub } from "@/lib/money";
@@ -11,7 +12,7 @@ import { PALETTE_MIME, setDragPayload, type PalettePayload } from "./Canvas";
 import { CapIcons, GROUP_ICONS, NodeIcon, type NodeKey } from "./icons";
 import { useStudio } from "./store";
 
-type SectionId = "inputs" | "canvas" | ModelGroup;
+type SectionId = "inputs" | "canvas" | "library" | ModelGroup;
 
 const MODEL_GROUPS: { id: ModelGroup; title: string }[] = [
   { id: "video", title: "Видео" },
@@ -24,7 +25,7 @@ const MODEL_GROUPS: { id: ModelGroup; title: string }[] = [
   { id: "text", title: "Текст (AI)" },
 ];
 
-const DEFAULT_OPEN: SectionId[] = ["inputs", "video", "image", "tools"];
+const DEFAULT_OPEN: SectionId[] = ["inputs", "library", "video", "image", "tools"];
 
 /** Filters answer "what do I need this model to take or do". */
 const FILTERS: { key: keyof ModelCaps; label: string }[] = [
@@ -91,6 +92,7 @@ export function Sidebar() {
   const addNode = useStudio((s) => s.addNode);
   const fx = useStudio((s) => s.fx);
   const blocked = useStudio((s) => s.blockedVendors);
+  const library = useStudio((s) => s.library);
   const { screenToFlowPosition } = useReactFlow();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<(keyof ModelCaps)[]>([]);
@@ -129,7 +131,7 @@ export function Sidebar() {
   const addAtCenter = (p: PalettePayload) => {
     const r = document.querySelector(".react-flow")?.getBoundingClientRect();
     const at = r ? screenToFlowPosition({ x: r.left + r.width / 2 - 160, y: r.top + r.height / 3 }) : { x: 0, y: 0 };
-    addNode(p.type, { x: Math.round(at.x), y: Math.round(at.y) }, { kind: p.kind, modelId: p.modelId, listKind: p.listKind }); // store nudges to free space
+    addNode(p.type, { x: Math.round(at.x), y: Math.round(at.y) }, { kind: p.kind, modelId: p.modelId, listKind: p.listKind, assetId: p.assetId }); // store nudges to free space
   };
 
   // price of a default run: lets people compare models before picking one
@@ -174,6 +176,19 @@ export function Sidebar() {
             <SimpleItem node="upload" title="Файл" desc="Картинка, видео или аудио" payload={{ type: "image" }} onAdd={addAtCenter} />
             <SimpleItem node="list" title="Список промтов" desc="Пакетный запуск: модель сработает на каждую строку" payload={{ type: "list", listKind: "text" }} onAdd={addAtCenter} />
             <SimpleItem node="list" title="Список файлов" desc="Пакетный запуск: по разу на каждый файл" payload={{ type: "list", listKind: "image" }} onAdd={addAtCenter} />
+          </Section>
+        )}
+
+        {!narrowing && (
+          <Section id="library" title="Моя библиотека" count={library.length} icon={<BookmarkSimpleIcon size={13} aria-hidden />} open={open.includes("library")} onToggle={toggle}>
+            {library.map((item) => (
+              <LibraryRow key={item.id} item={item}
+                onDragStart={(e) => startDrag(e, { type: "asset", assetId: item.id })}
+                onAdd={() => addAtCenter({ type: "asset", assetId: item.id })} />
+            ))}
+            <button type="button" className="show-more library-new" onClick={() => useStudio.setState({ libraryEdit: "new" })}>
+              <PlusIcon size={12} weight="bold" aria-hidden /> Персонаж, товар, бренд или стиль
+            </button>
           </Section>
         )}
 

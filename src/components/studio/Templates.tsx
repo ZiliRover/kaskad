@@ -14,6 +14,7 @@ export function iconFor(n: GraphNode): NodeKey {
   if (n.type === "image") return `upload:${n.data.kind ?? "image"}`;
   if (n.type === "model") return n.data.modelId.startsWith("kaskad/") ? "tool" : `model:${n.data.kind}`;
   if (n.type === "list") return "list";
+  if (n.type === "asset") return "asset";
   return n.type;
 }
 
@@ -22,6 +23,7 @@ export function nodeLabel(n: GraphNode): string {
   if (n.type === "image") return n.data.kind === "video" ? "Видео" : n.data.kind === "audio" ? "Аудио" : "Фото";
   if (n.type === "model") return getModel(n.data.modelId)?.name ?? n.data.modelId;
   if (n.type === "list") return "Список";
+  if (n.type === "asset") return n.data.name;
   return "";
 }
 

@@ -89,7 +89,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-const HEIGHT: Record<GraphNode["type"], number> = { prompt: 230, image: 300, list: 320, model: 560, note: 170, group: 200 };
+const HEIGHT: Record<GraphNode["type"], number> = { prompt: 230, image: 300, list: 320, asset: 320, model: 560, note: 170, group: 200 };
 
 /** Columns by depth (longest path from a source), stacked top to bottom. */
 function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {

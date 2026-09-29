@@ -34,6 +34,8 @@ export type PricingSpec =
   | { type: "video"; skus: Record<string, string> }
   | { type: "image"; lines: PricingLine[] }
   | { type: "text"; prompt: number; completion: number; image?: number }
+  /** a small paid step with a known typical price (speech recognition for subtitles) */
+  | { type: "flat"; usd: number }
   /** speech: billed per character of the text */
   | { type: "chars"; usdPerChar: number }
   /** our own tools run on the server (ffmpeg): no provider bill */

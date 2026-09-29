@@ -221,6 +221,22 @@ const TOOLS: ModelSpec[] = [
     pricing: { type: "free" },
   },
   {
+    id: "kaskad/subtitles", kind: "video", group: "tools", name: "Субтитры", vendor: "Каскад",
+    blurb: "Распознаёт речь и вшивает субтитры, как в Reels", featured: false, promptOptional: true,
+    caps: { ...NO_CAPS, sourceVideo: true },
+    inputs: [
+      { key: "video", dtype: "video", label: "Видео", max: 1, min: 1 },
+      { key: "prompt", dtype: "text", label: "Текст", max: 1, min: 0, hint: "если речи нет" },
+    ],
+    params: [
+      enumParam("look", "Стиль", "reels", [["reels", "Reels: слово подсвечивается"], ["classic", "Классика"]]),
+      enumParam("position", "Где", "bottom", [["bottom", "Снизу"], ["center", "По центру"], ["top", "Сверху"]]),
+      enumParam("size", "Размер", "m", [["s", "Мелкий"], ["m", "Средний"], ["l", "Крупный"]]),
+    ],
+    // speech recognition: about a hundredth of a cent per second of sound
+    pricing: { type: "flat", usd: 0.001 },
+  },
+  {
     id: "kaskad/caption-image", kind: "image", group: "tools", name: "Текст на картинку", vendor: "Каскад",
     blurb: "Надпись поверх: заголовок, цена, преимущество", featured: false, promptOptional: false,
     caps: NO_CAPS,
@@ -272,6 +288,18 @@ const SPEECH: ModelSpec[] = [
     pricing: { type: "chars", usdPerChar: 0.000015 },
   },
   {
+    id: "google/lyria-3-clip-preview", kind: "audio", group: "audio", name: "Lyria 3", vendor: "Google",
+    blurb: "Музыка по описанию: трек на 30 секунд", featured: true, promptOptional: false,
+    caps: NO_CAPS, inputs: [{ key: "prompt", dtype: "text", label: "Описание музыки", max: 1, min: 1, hint: "жанр, настроение, темп" }],
+    params: [], pricing: { type: "flat", usd: 0.04 },
+  },
+  {
+    id: "google/lyria-3-pro-preview", kind: "audio", group: "audio", name: "Lyria 3 Pro", vendor: "Google",
+    blurb: "Полноценная песня по описанию", featured: false, promptOptional: false,
+    caps: NO_CAPS, inputs: [{ key: "prompt", dtype: "text", label: "Описание музыки", max: 1, min: 1, hint: "жанр, настроение, слова" }],
+    params: [], pricing: { type: "flat", usd: 0.08 },
+  },
+  {
     id: "fish-audio/s2.1-pro", kind: "audio", group: "audio", name: "Голос по образцу", vendor: "Fish Audio",
     blurb: "Говорит голосом из твоей записи: 10–30 секунд чистой речи", featured: true, promptOptional: false,
     caps: NO_CAPS,
@@ -280,6 +308,9 @@ const SPEECH: ModelSpec[] = [
     pricing: { type: "chars", usdPerChar: 0.000015 },
   },
 ];
+
+/** Audio models that compose music (chat with audio output) rather than read text aloud. */
+export const MUSIC_MODELS = new Set(["google/lyria-3-clip-preview", "google/lyria-3-pro-preview"]);
 
 const FEATURED_RANK = new Map(FEATURED.map((f, i) => [f.id, i]));
 

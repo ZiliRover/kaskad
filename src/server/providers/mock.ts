@@ -65,6 +65,19 @@ export const mockProvider: Provider = {
     return { text: `Тестовый ответ${imgs}. Улучшенный промт: ${req.prompt}`, costUsd: 0 };
   },
 
+  async music(req) {
+    await sleep(1500);
+    maybeFail(req.prompt);
+    return { audio: { bytes: await tone(8), mime: "audio/mpeg" }, costUsd: 0 };
+  },
+
+  async transcribe() {
+    await sleep(600);
+    // no recognition in test mode: a fixed phrase spread over a few seconds
+    const text = "Тестовые субтитры появляются слово за словом, как в роликах".split(" ");
+    return { words: text.map((word, i) => ({ word, start: 0.2 + i * 0.45, end: 0.6 + i * 0.45 })), costUsd: 0 };
+  },
+
   async speech(req) {
     await sleep(700);
     maybeFail(req.text);

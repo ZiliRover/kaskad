@@ -118,6 +118,7 @@ function imageEstimate(spec: ModelSpec, lines: PricingLine[], ctx: EstimateConte
 export function estimate(spec: ModelSpec, ctx: EstimateContext): Estimate {
   const p = spec.pricing;
   if (p.type === "free") return { usd: 0, approx: false };
+  if (p.type === "flat") return { usd: p.usd, approx: spec.id.startsWith("kaskad/") };
   if (p.type === "chars") return { usd: Math.max(1, ctx.promptChars ?? 300) * p.usdPerChar, approx: false };
   if (p.type === "video") return videoEstimate(spec, p.skus, ctx);
   if (p.type === "image") {

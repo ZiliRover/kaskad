@@ -123,7 +123,7 @@ export const ModelNode = memo(function ModelNode({ id, data, selected }: NodePro
       {status && (
         <span className={`node-status${status.tone ? ` is-${status.tone}` : ""}`} title={status.text}>{status.text}</span>
       )}
-      {isTool ? (
+      {spec?.pricing.type === "free" ? (
         <span className="node-price" title="Выполняется на нашем сервере">бесплатно</span>
       ) : showFinal ? (
         <span className="node-price is-final" title="Итоговая стоимость последнего запуска">{formatKop(finalKop!)}</span>

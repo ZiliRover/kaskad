@@ -1,10 +1,13 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { InputRef } from "@/lib/jobs";
-import { getModel, TOOL_PREFIX } from "@/lib/models/registry";
+import { getModel, MUSIC_MODELS, TOOL_PREFIX } from "@/lib/models/registry";
 import { db, jobs, outputs, type JobRow } from "../db";
 import { getProvider, providerMode, ProviderError } from "../providers";
 import { asDataUrl, newKey, putFile, signedFileUrl, storagePath } from "../storage";
-import { addAudio, caption, concatVideos, extractFrame, reframe, speedVideo, trimVideo, type CaptionStyle } from "../tools";
+import {
+  addAudio, burnSubtitles, caption, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
+  type CaptionStyle, type SubtitleStyle, type Word,
+} from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
 
 const VIDEO_POLL_MS = 5_000;
@@ -138,6 +141,23 @@ async function runTool(job: JobRow) {
       return out(await reframe(await one("video", "видео"), "video", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "video/mp4");
     case "kaskad/reframe-image":
       return out(await reframe(await one("image", "картинку"), "image", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "image/png");
+    case "kaskad/subtitles": {
+      const file = await one("video", "видео");
+      const text = await resolveText(job, ports.prompt);
+      let words: Word[];
+      let cost: number | null = 0;
+      if (text) words = await wordsFromText(file, text); // the text is known: no recognition, free
+      else {
+        const speech = await extractSpeech(file);
+        if (!speech) throw new InputError("В ролике нет звука. Подключи текст, и субтитры встанут по времени");
+        const r = await getProvider().transcribe(speech);
+        words = r.words;
+        cost = billable(job, r.costUsd);
+      }
+      const style = { look: p("look"), position: p("position"), size: p("size") } as SubtitleStyle;
+      const bytes = await burnSubtitles(file, words, style);
+      return completeJob(job, [{ fileKey: await store(job, bytes, "video/mp4"), mime: "video/mp4" }], cost);
+    }
     case "kaskad/caption-image":
     case "kaskad/caption-video": {
       const kind = job.modelId === "kaskad/caption-image" ? "image" : "video";
@@ -173,6 +193,12 @@ async function run(job: JobRow) {
 
   if (job.kind === "audio") {
     // a voice sample goes inline: speech models accept it without a public link
+    if (MUSIC_MODELS.has(job.modelId)) {
+      const m = await provider.music({ model: job.modelId, prompt });
+      const key = await store(job, m.audio.bytes, m.audio.mime);
+      await completeJob(job, [{ fileKey: key, mime: m.audio.mime }], billable(job, m.costUsd));
+      return;
+    }
     const [sample] = await resolveMedia(job, ports.voice_sample);
     const r = await provider.speech({
       model: job.modelId, text: prompt, voice: params.voice ? String(params.voice) : null, sample: sample ?? null,

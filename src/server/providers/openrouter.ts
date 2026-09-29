@@ -1,5 +1,5 @@
 import {
-  ProviderError, type ImageRequest, type Media, type Provider, type SpeechRequest, type TextRequest, type VideoPoll, type VideoRequest,
+  ProviderError, type ImageRequest, type Media, type Provider, type SpeechRequest, type TextRequest, type TranscribeResult, type VideoPoll, type VideoRequest,
 } from "./types";
 
 const BASE = "https://openrouter.ai/api/v1";
@@ -252,6 +252,8 @@ export const openRouter: Provider = {
   },
 
   speech: speechCall,
+  transcribe: transcribeCall,
+  music: musicCall,
 };
 
 /** Text to speech (POST /audio/speech): raw audio bytes on success, JSON on error. */
@@ -277,6 +279,78 @@ async function speechCall(req: SpeechRequest): Promise<{ audio: Media; costUsd: 
   if (buf.length < 1000) throw new ProviderError("Модель вернула пустую запись. Попробуйте другой голос или модель.");
   // the endpoint returns audio only; the price is known up front (per character)
   return { audio: { bytes: buf, mime: "audio/mpeg" }, costUsd: null };
+}
+
+/**
+ * Music (Lyria): chat completions with audio output. Audio output is only streamed,
+ * as base64 chunks in delta.audio.data over SSE.
+ */
+async function musicCall(req: { model: string; prompt: string }): Promise<{ audio: Media; costUsd: number | null }> {
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}/chat/completions`, {
+      method: "POST", headers: headers(), signal: AbortSignal.timeout(5 * 60_000),
+      body: JSON.stringify({
+        model: req.model, messages: [{ role: "user", content: req.prompt }],
+        modalities: ["text", "audio"], audio: { format: "wav" }, stream: true, usage: { include: true },
+      }),
+    });
+  } catch {
+    throw new ProviderError("Нет связи с провайдером", true);
+  }
+  if (!r.ok || !r.body) {
+    let data: Json | null = null;
+    try { data = JSON.parse(await r.text()); } catch { /* not JSON */ }
+    throw failure(r.status, data);
+  }
+  const chunks: string[] = [];
+  let costUsd: number | null = null;
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const chunk = JSON.parse(data);
+        if (chunk.error) throw failure(502, chunk);
+        const audio = chunk.choices?.[0]?.delta?.audio;
+        if (audio?.data) chunks.push(audio.data);
+        if (chunk.usage?.cost !== undefined) costUsd = Number(chunk.usage.cost);
+      } catch (e) {
+        if (e instanceof ProviderError) throw e; // a partial line: ignore, the next read completes it
+      }
+    }
+  }
+  const bytes = new Uint8Array(Buffer.from(chunks.join(""), "base64"));
+  if (bytes.length < 1000) throw new ProviderError("Модель не вернула музыку. Попробуйте изменить описание.");
+  return { audio: { bytes, mime: "audio/wav" }, costUsd };
+}
+
+const STT_MODEL = "openai/whisper-large-v3";
+
+async function transcribeCall(audio: Uint8Array): Promise<TranscribeResult> {
+  const d = await call("/audio/transcriptions", {
+    method: "POST",
+    body: JSON.stringify({
+      model: STT_MODEL,
+      input_audio: { data: Buffer.from(audio).toString("base64"), format: "mp3" },
+      response_format: "verbose_json",
+      timestamp_granularities: ["word"],
+    }),
+    timeoutMs: 3 * 60_000,
+  });
+  const words = (Array.isArray(d.words) ? d.words : [])
+    .map((w: Json) => ({ word: String(w.word ?? "").trim(), start: Number(w.start), end: Number(w.end) }))
+    .filter((w: { word: string; start: number; end: number }) => w.word && Number.isFinite(w.start) && Number.isFinite(w.end));
+  return { words, costUsd: cost(d) };
 }
 
 const g = globalThis as unknown as { __orBalance?: { usd: number; at: number } };

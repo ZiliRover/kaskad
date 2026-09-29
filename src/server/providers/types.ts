@@ -36,6 +36,11 @@ export interface SpeechRequest {
   sample: string | null;
 }
 
+export interface TranscribeResult {
+  words: { word: string; start: number; end: number }[];
+  costUsd: number | null;
+}
+
 export interface Media {
   bytes: Uint8Array;
   mime: string;
@@ -55,6 +60,10 @@ export interface Provider {
   downloadVideo(externalId: string): Promise<Media>;
   text(req: TextRequest): Promise<{ text: string; costUsd: number | null }>;
   speech(req: SpeechRequest): Promise<{ audio: Media; costUsd: number | null }>;
+  /** music from a description (streamed audio output) */
+  music(req: { model: string; prompt: string }): Promise<{ audio: Media; costUsd: number | null }>;
+  /** speech recognition with word timings (subtitles) */
+  transcribe(audio: Uint8Array): Promise<TranscribeResult>;
 }
 
 /** Error whose message is safe and meaningful to show the user as-is. */

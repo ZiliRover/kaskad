@@ -262,3 +262,110 @@ export async function caption(file: string, kind: "image" | "video", text: strin
     return readFile(path.join(dir, out));
   });
 }
+
+// ---------------------------------------------------------------- subtitles
+
+export interface Word { word: string; start: number; end: number }
+
+/** The clip's sound as a small mono MP3 for speech recognition; null when there is none. */
+export async function extractSpeech(video: string): Promise<Uint8Array | null> {
+  const { audio } = await probe(video);
+  if (!audio) return null;
+  return withTmp(async (dir) => {
+    const out = path.join(dir, "speech.mp3");
+    await exec(FFMPEG, ["-v", "error", "-i", video, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", "-y", out]);
+    return readFile(out);
+  });
+}
+
+/** Evenly timed words for a known text (no recognition needed). */
+export async function wordsFromText(video: string, text: string): Promise<Word[]> {
+  const words = text.split(/\s+/).filter(Boolean);
+  const total = await duration(video);
+  const chars = words.reduce((s, w) => s + w.length + 1, 0);
+  let t = 0.15;
+  const span = Math.max(0.5, total - 0.3);
+  return words.map((w) => {
+    const len = ((w.length + 1) / chars) * span;
+    const item = { word: w, start: t, end: t + len };
+    t += len;
+    return item;
+  });
+}
+
+/** The font family name libass must ask for, matching the file overlayFont() found. */
+function fontFamily(file: string): string {
+  if (process.env.OVERLAY_FONT_FAMILY) return process.env.OVERLAY_FONT_FAMILY;
+  const f = path.basename(file).toLowerCase();
+  if (f.startsWith("segoe")) return "Segoe UI";
+  if (f.startsWith("dejavu")) return "DejaVu Sans";
+  return "Arial";
+}
+
+const assTime = (s: number) => {
+  const cs = Math.max(0, Math.round(s * 100));
+  const h = Math.floor(cs / 360000), m = Math.floor((cs % 360000) / 6000), sec = Math.floor((cs % 6000) / 100);
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
+};
+const assText = (s: string) => s.replace(/\\/g, "").replace(/[{}]/g, "").replace(/\n/g, " ");
+
+/** Phrases of a few words, split on pauses and sentence ends: what fits on one line. */
+function phrases(words: Word[], maxChars: number): Word[][] {
+  const out: Word[][] = [];
+  let cur: Word[] = [];
+  for (const [i, w] of words.entries()) {
+    const text = cur.map((x) => x.word).join(" ");
+    const pause = cur.length && w.start - cur[cur.length - 1].end > 0.6;
+    if (cur.length && (pause || cur.length >= 4 || (text + " " + w.word).length > maxChars)) { out.push(cur); cur = []; }
+    cur.push({ ...w, word: w.word.trim() });
+    if (/[.!?…]$/.test(w.word.trim()) && i < words.length - 1) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+export interface SubtitleStyle { look: "reels" | "classic"; position: "top" | "center" | "bottom"; size: "s" | "m" | "l" }
+
+/**
+ * Burns subtitles into a video. "reels": short phrases, bold capitals, the word being
+ * spoken lit in the accent colour; "classic": plain phrases with an outline.
+ */
+export async function burnSubtitles(video: string, words: Word[], style: SubtitleStyle): Promise<Uint8Array> {
+  if (!words.length) throw new ProviderError("В ролике не нашлось речи для субтитров. Подключи текст вручную.");
+  video = path.resolve(video);
+  const { width: W, height: H } = await imageSize(video);
+  const fontSize = Math.round(Math.min(W, H) * { s: 0.055, m: 0.072, l: 0.095 }[style.size]);
+  const align = { bottom: 2, center: 5, top: 8 }[style.position];
+  const reels = style.look === "reels";
+  const font = overlayFont();
+  const lines = phrases(words, Math.max(10, Math.floor((W * 0.8) / (fontSize * 0.6))));
+  const upper = (s: string) => (reels ? s.toUpperCase() : s);
+
+  const events: string[] = [];
+  for (const [pi, p] of lines.entries()) {
+    const end = Math.max(p[p.length - 1].end, (lines[pi + 1]?.[0].start ?? p[p.length - 1].end + 0.4) - 0.02);
+    if (!reels) {
+      events.push(`Dialogue: 0,${assTime(p[0].start)},${assTime(end)},Main,,0,0,0,,${assText(p.map((w) => w.word).join(" "))}`);
+      continue;
+    }
+    for (const [wi, w] of p.entries()) {
+      const to = wi < p.length - 1 ? p[wi + 1].start : end;
+      const text = p.map((x, k) => (k === wi ? `{\\c&H5BF7D7&}${assText(upper(x.word))}{\\c&HFFFFFF&}` : assText(upper(x.word)))).join(" ");
+      events.push(`Dialogue: 0,${assTime(w.start)},${assTime(Math.max(to, w.start + 0.05))},Main,,0,0,0,,${text}`);
+    }
+  }
+  const ass = [
+    "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${W}`, `PlayResY: ${H}`, "WrapStyle: 0", "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: Main,${fontFamily(font)},${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,${Math.max(2, Math.round(fontSize * (reels ? 0.09 : 0.06)))},${reels ? 2 : 1},${align},${Math.round(W * 0.06)},${Math.round(W * 0.06)},${Math.round(H * 0.08)},1`,
+    "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text", ...events, "",
+  ].join("\n");
+
+  return withTmp(async (dir) => {
+    await copyFile(font, path.join(dir, path.basename(font)));
+    await writeFile(path.join(dir, "subs.ass"), ass, "utf8");
+    await exec(FFMPEG, ["-v", "error", "-i", video, "-vf", "ass=subs.ass:fontsdir=.", "-map", "0:v", "-map", "0:a?", "-c:a", "copy", ...H264, "-y", "out.mp4"], 10 * 60_000, dir);
+    return readFile(path.join(dir, "out.mp4"));
+  });
+}

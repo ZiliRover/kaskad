@@ -59,14 +59,15 @@ const proposal = z.object({
   title: z.string().max(80).catch("Новый граф"),
   summary: z.string().max(600).catch(""),
   nodes: z.array(z.object({
-    id: z.string().min(1).max(40),
+    // clip rather than refuse: a long prompt or id should not throw away the whole plan
+    id: z.string().min(1).transform((v) => v.slice(0, 40)),
     type: z.enum(["prompt", "upload", "list", "model", "note"]),
-    text: z.string().max(8000).optional(),
+    text: z.string().transform((v) => v.slice(0, 8000)).optional(),
     kind: z.enum(["image", "video", "audio", "text"]).optional(),
     model: z.string().max(200).optional(),
     params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
-  })).min(1).max(40),
-  edges: z.array(z.object({ from: z.string(), to: z.string(), port: z.string() })).max(80).default([]),
+  })).min(1).max(200).transform((a) => a.slice(0, 40)),
+  edges: z.array(z.object({ from: z.string(), to: z.string(), port: z.string() })).max(400).default([]).transform((a) => a.slice(0, 80)),
 });
 
 export interface AgentResult {

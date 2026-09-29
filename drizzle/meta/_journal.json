@@ -78,6 +78,20 @@
       "when": 1790690872903,
       "tag": "0010_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790692079495,
+      "tag": "0011_posts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790692091741,
+      "tag": "0012_drop_app_showcase",
+      "breakpoints": true
     }
   ]
 }

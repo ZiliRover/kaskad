@@ -6,6 +6,7 @@ import type { OutputVersion } from "@/lib/jobs";
 import type { MediaItem } from "@/lib/media";
 import { getModel } from "@/lib/models/registry";
 import { PALETTE_MIME, setDragPayload, type PalettePayload } from "./Canvas";
+import { FeedButton } from "./FeedButton";
 import { useStudio } from "./store";
 
 const time = (iso: string) =>
@@ -144,12 +145,15 @@ export function Gallery() {
               <span className="gallery-cap">{o.caption}{o.sub && <span className="gallery-sub">{o.sub}</span>}</span>
               <span>{time(o.createdAt)}</span>
             </figcaption>
-            {o.kind === "image" && o.fileKey && (
-              <button type="button" className="gallery-save" title="Сохранить в библиотеку как персонажа, товар, бренд или стиль"
-                onClick={() => useStudio.setState({ libraryEdit: "new", libraryPrefill: [o.fileKey!] })}>
-                <BookmarkSimpleIcon size={12} aria-hidden />В библиотеку
-              </button>
-            )}
+            <div className="gallery-actions">
+              {o.kind === "image" && o.fileKey && (
+                <button type="button" className="gallery-save" title="Сохранить в библиотеку как персонажа, товар, бренд или стиль"
+                  onClick={() => useStudio.setState({ libraryEdit: "new", libraryPrefill: [o.fileKey!] })}>
+                  <BookmarkSimpleIcon size={12} aria-hidden />В библиотеку
+                </button>
+              )}
+              {scope !== "uploads" && (o.kind === "image" || o.kind === "video") && o.url && <FeedButton outputId={o.id} />}
+            </div>
           </figure>
         ))}
         {more && <button type="button" className="show-more" onClick={() => void loadMore()}>Показать ещё</button>}

@@ -35,7 +35,7 @@
 - **Draft, then final.** One switch runs everything at the cheapest settings to check an idea; switch off for the final.
 - **Library.** Save characters, products, brands and styles once; drop them into any project and their photos and description go into the models.
 - **Team work.** Share a project with editors and viewers, see each other's cursors and edits live, leave comments right on the canvas. A media library holds everything from every project.
-- **Showcase.** Published apps can go on a public showcase where people find them and like them.
+- **Showcase.** A full-screen wall of images and videos people chose to share, sorted by likes or by date. Authors publish single results, never their projects, and decide whether the prompt is shown; anyone can copy a shared prompt.
 - **Batches.** A List node holds up to 50 prompts or files; every model it feeds runs once per item, and the chain after it follows item by item. Twenty product photos become twenty cards and twenty videos with one click.
 - **Describe it, get a graph.** The agent turns a sentence ("vertical WB video from my photo with a -30% caption") into a checked chain of models, prompts and tools, with the price shown before anything runs.
 - **Apps from graphs.** Publish a project as a simple form: pick which inputs people fill in and which results they get, share the link. Runners pay for their own runs and never see the graph.

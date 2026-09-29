@@ -8,7 +8,6 @@ import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
 import { formatKop, formatRub, toKop, type Fx } from "@/lib/money";
 import { BRAND } from "@/config/brand";
 import { ACCEPT_ATTR, fileUrl, mediaFiles, uploadFile } from "../studio/upload";
-import { LikeButton } from "./Showcase";
 
 type Values = Record<string, string | string[]>;
 
@@ -65,7 +64,7 @@ function FileField({ field, value, onChange, multiple }: {
   );
 }
 
-export function AppRunner({ app, price, fx, balanceKop, graphId: initialGraph, initialState, isOwner, sourceGraphId, like }: {
+export function AppRunner({ app, price, fx, balanceKop, graphId: initialGraph, initialState, isOwner, sourceGraphId }: {
   app: AppInfo;
   price: { unitUsd: number; approx: boolean; perItem: boolean };
   fx: Fx;
@@ -75,8 +74,6 @@ export function AppRunner({ app, price, fx, balanceKop, graphId: initialGraph, i
   initialState: GraphState;
   isOwner: boolean;
   sourceGraphId: string | null;
-  /** likes, when the app is in the showcase */
-  like: { likes: number; liked: boolean } | null;
 }) {
   const [values, setValues] = useState<Values>(() => Object.fromEntries(app.fields.map((f) => [
     f.nodeId, f.type === "text" || f.type === "list-text" ? f.default ?? "" : [],
@@ -149,10 +146,7 @@ export function AppRunner({ app, price, fx, balanceKop, graphId: initialGraph, i
 
       <main className="app-main">
         <form className="app-form" onSubmit={(e) => { e.preventDefault(); if (!busy && !active) void run(); }}>
-          <div className="app-title-row">
-            <h1 className="app-title">{app.name}</h1>
-            {like && <LikeButton appId={app.id} likes={like.likes} liked={like.liked} />}
-          </div>
+          <h1 className="app-title">{app.name}</h1>
           {app.description && <p className="app-desc">{app.description}</p>}
 
           {app.fields.map((f) => (

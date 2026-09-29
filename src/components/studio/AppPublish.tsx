@@ -40,7 +40,6 @@ export function AppPublish({ graphId, projectName }: { graphId: string; projectN
   const [description, setDescription] = useState("");
   const [fields, setFields] = useState<Record<string, FieldDraft>>({});
   const [outputs, setOutputs] = useState<string[]>([]);
-  const [listed, setListed] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
@@ -72,7 +71,7 @@ export function AppPublish({ graphId, projectName }: { graphId: string; projectN
       }));
       const r = await fetch("/api/apps", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ graphId, name, description, fields: list, outputs, listed }),
+        body: JSON.stringify({ graphId, name, description, fields: list, outputs }),
       });
       if (authLost(r)) return;
       const d = await r.json().catch(() => ({}));
@@ -151,10 +150,6 @@ export function AppPublish({ graphId, projectName }: { graphId: string; projectN
               })}
             </div>
 
-            <label className="director-check">
-              <input type="checkbox" checked={listed} onChange={(e) => setListed(e.target.checked)} />
-              Показать в витрине: другие смогут найти приложение и поставить лайк
-            </label>
             {error && <p className="auth-error" role="alert">{error}</p>}
             <div className="dialog-actions">
               <button type="submit" className="btn btn-primary" disabled={busy || !outputs.length || !name.trim()}>

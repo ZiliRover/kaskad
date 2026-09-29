@@ -120,7 +120,7 @@ async function duration(file: string): Promise<number> {
   return d;
 }
 
-async function imageSize(file: string): Promise<{ width: number; height: number }> {
+export async function imageSize(file: string): Promise<{ width: number; height: number }> {
   const v = await exec(FFPROBE, ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", file]);
   const [width, height] = v.trim().split(",").map(Number);
   if (!width || !height) throw new ProviderError("Не удалось прочитать картинку");

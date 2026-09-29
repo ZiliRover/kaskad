@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { toggleLike } from "@/server/apps";
 import { requireUser } from "@/server/auth";
+import { toggleLike } from "@/server/posts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

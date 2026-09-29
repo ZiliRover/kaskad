@@ -4,6 +4,7 @@ import { CaretLeftIcon, CaretRightIcon, CheckIcon, PushPinIcon, WaveformIcon } f
 import { useEffect, useState } from "react";
 import type { NodeState, OutputVersion } from "@/lib/jobs";
 import type { MediaKind } from "@/lib/models/types";
+import { FeedButton } from "../FeedButton";
 import { useStudio } from "../store";
 
 interface Props {
@@ -151,6 +152,7 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
               {batch.length > 1 && (
                 <a className="link-btn nodrag" href={`/api/graphs/${graphId}/zip?node=${encodeURIComponent(nodeId)}`} download>Скачать всё</a>
               )}
+              {(out.kind === "image" || out.kind === "video") && <FeedButton outputId={out.id} up />}
               <a className="link-btn nodrag" href={`${out.url}?download`} download>Скачать</a>
             </>
           ) : null}

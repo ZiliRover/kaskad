@@ -16,7 +16,6 @@ const body = z.object({
   description: z.string().max(600).default(""),
   fields: z.array(appField).max(20),
   outputs: z.array(z.string().min(1).max(64)).min(1).max(20),
-  listed: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {

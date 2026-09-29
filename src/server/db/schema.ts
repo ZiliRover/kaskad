@@ -161,21 +161,35 @@ export const apps = pgTable("apps", {
   doc: jsonb("doc").$type<GraphDoc>().notNull(),
   fields: jsonb("fields").$type<AppField[]>().notNull(),
   outputs: jsonb("outputs").$type<string[]>().notNull(),
-  /** shown in the public showcase */
-  listed: boolean("listed").notNull().default(false),
-  /** a result that shows what the app makes (copied under uploads/app-<id>/) */
-  cover: text("cover"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt), index("apps_listed_idx").on(t.listed, t.createdAt)]);
-
-/** One like per person per app. */
-export const appLikes = pgTable("app_likes", {
-  appId: uuid("app_id").notNull().references(() => apps.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [primaryKey({ columns: [t.appId, t.userId] }), index("app_likes_app_idx").on(t.appId)]);
+}, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt)]);
 
 export type AppRow = typeof apps.$inferSelect;
+
+/**
+ * The showcase: results people chose to show everyone. The file is copied under
+ * uploads/feed-<id>/ so the post outlives the project; the prompt only if the author shares it.
+ */
+export const posts = pgTable("posts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  /** the result it came from; one post per result */
+  outputId: uuid("output_id").notNull().unique(),
+  kind: text("kind").notNull(),
+  fileKey: text("file_key").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  prompt: text("prompt"),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("posts_created_idx").on(t.createdAt)]);
+
+/** One like per person per post. */
+export const postLikes = pgTable("post_likes", {
+  postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("post_likes_post_idx").on(t.postId)]);
 
 /** The user's library: characters, products, brands and styles to reuse across projects. */
 export const libraryItems = pgTable("library_items", {

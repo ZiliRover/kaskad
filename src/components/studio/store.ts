@@ -85,6 +85,8 @@ export interface StudioStore {
   libraryEdit: LibraryItem | "new" | null;
   /** photos to start a new library item with (from the media library) */
   libraryPrefill: string[] | null;
+  /** my results already in the showcase feed: output id → post id (null until loaded) */
+  posted: Record<string, string> | null;
   /** draft mode: runs use the cheapest settings of every model */
   draft: boolean;
   setDraft(on: boolean): void;
@@ -425,6 +427,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   library: [],
   libraryEdit: null,
   libraryPrefill: null,
+  posted: null,
   draft: false,
 
   setDraft(on) {

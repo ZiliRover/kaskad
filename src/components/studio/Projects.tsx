@@ -1,6 +1,6 @@
 "use client";
 
-import { AppWindowIcon, CaretDownIcon, CopyIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { AppWindowIcon, CaretDownIcon, CopyIcon, PencilSimpleIcon, PlusIcon, StorefrontIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectSummary } from "@/lib/projects";
 import { authLost, flushPendingSave, useStudio } from "./store";
@@ -43,7 +43,7 @@ export function Projects({ currentId, initialName, initial }: { currentId: strin
   const toast = useStudio((s) => s.toast);
   const ask = useStudio((s) => s.ask);
   const setPanel = useStudio((s) => s.setPanel);
-  const [apps, setApps] = useState<{ id: string; name: string; sourceGraphId: string | null }[]>([]);
+  const [apps, setApps] = useState<{ id: string; name: string; sourceGraphId: string | null; listed: boolean }[]>([]);
   const [openMenu, setOpenMenu] = useState(false);
   const [list, setList] = useState(initial);
   const [name, setName] = useState(initialName);
@@ -153,9 +153,18 @@ export function Projects({ currentId, initialName, initial }: { currentId: strin
             <button type="button" className="projects-publish" onClick={() => { setOpenMenu(false); setPanel({ publishOpen: true }); }}>
               <AppWindowIcon size={14} aria-hidden />Сделать приложение из этого проекта
             </button>
+            <a className="projects-showcase" href="/showcase"><StorefrontIcon size={14} aria-hidden />Витрина приложений</a>
             {apps.filter((a) => a.sourceGraphId === currentId).map((a) => (
               <div key={a.id} className="projects-app">
                 <a href={`/app/${a.id}`} target="_blank" rel="noreferrer">{a.name}</a>
+                <button type="button" className={`icon-btn${a.listed ? " is-on" : ""}`} aria-pressed={a.listed}
+                  title={a.listed ? "В витрине: убрать" : "Показать в витрине"} aria-label={a.listed ? "Убрать из витрины" : "Показать в витрине"}
+                  onClick={() => void act(async () => {
+                    await send(`/api/apps/${a.id}`, "PATCH", { listed: !a.listed });
+                    setApps((l) => l.map((x) => (x.id === a.id ? { ...x, listed: !a.listed } : x)));
+                  })}>
+                  <StorefrontIcon size={13} weight={a.listed ? "fill" : "regular"} aria-hidden />
+                </button>
                 <button type="button" className="icon-btn" title="Скопировать ссылку" aria-label={`Ссылка на «${a.name}»`}
                   onClick={() => navigator.clipboard.writeText(`${window.location.origin}/app/${a.id}`).then(() => toast("Ссылка скопирована"))}>
                   <CopyIcon size={13} aria-hidden />

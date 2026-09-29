@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid,
+  bigint, boolean, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { AppField } from "@/lib/apps";
@@ -160,8 +160,19 @@ export const apps = pgTable("apps", {
   doc: jsonb("doc").$type<GraphDoc>().notNull(),
   fields: jsonb("fields").$type<AppField[]>().notNull(),
   outputs: jsonb("outputs").$type<string[]>().notNull(),
+  /** shown in the public showcase */
+  listed: boolean("listed").notNull().default(false),
+  /** a result that shows what the app makes (copied under uploads/app-<id>/) */
+  cover: text("cover"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt)]);
+}, (t) => [index("apps_owner_idx").on(t.ownerId, t.createdAt), index("apps_listed_idx").on(t.listed, t.createdAt)]);
+
+/** One like per person per app. */
+export const appLikes = pgTable("app_likes", {
+  appId: uuid("app_id").notNull().references(() => apps.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.appId, t.userId] }), index("app_likes_app_idx").on(t.appId)]);
 
 export type AppRow = typeof apps.$inferSelect;
 

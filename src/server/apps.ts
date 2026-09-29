@@ -7,17 +7,17 @@
  * (graphs.app_id), so results, billing and access all work like a normal run.
  */
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AppField, AppInfo, AppValues } from "@/lib/apps";
 import { listItems, type GraphDoc, type GraphNode } from "@/lib/graph/types";
 import { fanOut } from "@/lib/graph/plan";
 import { estimate } from "@/lib/models/pricing";
 import { getModel } from "@/lib/models/registry";
 import { canReadFile } from "./access";
-import { apps, db, graphs, type AppRow } from "./db";
+import { appLikes, apps, db, graphs, outputs, type AppRow } from "./db";
 import { ownedGraph, saveGraph } from "./graphs";
 import { createRun, type CreateRunResult } from "./runs";
-import { mimeForKey, newKey, putFile, readStored } from "./storage";
+import { fileUrl, mimeForKey, newKey, putFile, readStored } from "./storage";
 
 export class AppError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -37,7 +37,7 @@ async function copyFile(key: string, appId: string): Promise<string> {
 }
 
 export async function publishApp(userId: string, graphId: string, input: {
-  name: string; description: string; fields: AppField[]; outputs: string[];
+  name: string; description: string; fields: AppField[]; outputs: string[]; listed?: boolean;
 }): Promise<AppRow> {
   const graph = await ownedGraph(graphId, userId);
   if (!graph) throw new AppError("Проект не найден", 404);
@@ -50,8 +50,8 @@ export async function publishApp(userId: string, graphId: string, input: {
     if (!t) throw new AppError("Поле формы ссылается на ноду, которой нет");
     fields.push({ ...f, ...t });
   }
-  const outputs = [...new Set(input.outputs)].filter((id) => byId.get(id)?.type === "model");
-  if (!outputs.length) throw new AppError("Выбери хотя бы одну ноду с результатом");
+  const outputs_ = [...new Set(input.outputs)].filter((id) => byId.get(id)?.type === "model");
+  if (!outputs_.length) throw new AppError("Выбери хотя бы одну ноду с результатом");
 
   const id = randomUUID();
   const asField = new Set(fields.map((f) => f.nodeId));
@@ -76,16 +76,22 @@ export async function publishApp(userId: string, graphId: string, input: {
   }
   const doc: GraphDoc = { nodes, edges: graph.doc.edges, viewport: graph.doc.viewport };
 
+  // the cover: the latest image or video the result nodes made in the project
+  const [last] = await db.select({ key: outputs.fileKey }).from(outputs)
+    .where(and(eq(outputs.graphId, graphId), inArray(outputs.nodeId, outputs_), sql`${outputs.kind} in ('image', 'video')`))
+    .orderBy(desc(outputs.createdAt)).limit(1);
+  const cover = last?.key ? await copyFile(last.key, id) : null;
+
   const [row] = await db.insert(apps).values({
-    id, ownerId: userId, sourceGraphId: graphId,
+    id, ownerId: userId, sourceGraphId: graphId, listed: !!input.listed, cover,
     name: input.name.trim().slice(0, 80) || graph.name, description: input.description.trim().slice(0, 600),
-    doc, fields, outputs,
+    doc, fields, outputs: outputs_,
   }).returning();
   return row;
 }
 
 export async function listApps(userId: string) {
-  return db.select({ id: apps.id, name: apps.name, createdAt: apps.createdAt, sourceGraphId: apps.sourceGraphId })
+  return db.select({ id: apps.id, name: apps.name, createdAt: apps.createdAt, sourceGraphId: apps.sourceGraphId, listed: apps.listed })
     .from(apps).where(eq(apps.ownerId, userId)).orderBy(desc(apps.createdAt));
 }
 
@@ -193,4 +199,55 @@ export function appPrice(app: AppRow): { unitUsd: number; approx: boolean; perIt
     approx ||= est.approx;
   }
   return { unitUsd, approx, perItem: listFields.size > 0 };
+}
+
+// ---------------------------------------------------------------- showcase
+
+export interface ShowcaseCard {
+  id: string; name: string; description: string;
+  cover: string | null; coverKind: "image" | "video" | null;
+  likes: number; liked: boolean; mine: boolean; createdAt: string;
+}
+
+/** Published apps whose authors chose to show them, most liked or newest first. */
+export async function listShowcase(userId: string, sort: "top" | "new", q: string): Promise<ShowcaseCard[]> {
+  const rows = await db.execute<{
+    id: string; name: string; description: string; cover: string | null; owner_id: string; created_at: Date;
+    likes: number; liked: boolean;
+  }>(sql`
+    select a.id, a.name, a.description, a.cover, a.owner_id, a.created_at,
+           (select count(*)::int from app_likes l where l.app_id = a.id) as likes,
+           exists (select 1 from app_likes l where l.app_id = a.id and l.user_id = ${userId}) as liked
+    from apps a
+    where a.listed ${q ? sql`and (a.name ilike ${`%${q}%`} or a.description ilike ${`%${q}%`})` : sql``}
+    order by ${sort === "top" ? sql`likes desc, a.created_at desc` : sql`a.created_at desc`}
+    limit 120
+  `);
+  return rows.map((r) => ({
+    id: r.id, name: r.name, description: r.description,
+    cover: r.cover ? fileUrl(r.cover) : null,
+    coverKind: r.cover ? (mimeForKey(r.cover).startsWith("video/") ? "video" : "image") : null,
+    likes: r.likes, liked: r.liked, mine: r.owner_id === userId, createdAt: new Date(r.created_at).toISOString(),
+  }));
+}
+
+/** Like or unlike; returns the new state. Only listed apps (or your own) can be liked. */
+export async function toggleLike(appId: string, userId: string): Promise<{ liked: boolean; likes: number } | null> {
+  const [app] = await db.select({ listed: apps.listed, ownerId: apps.ownerId }).from(apps).where(eq(apps.id, appId));
+  if (!app || (!app.listed && app.ownerId !== userId)) return null;
+  const removed = await db.delete(appLikes).where(and(eq(appLikes.appId, appId), eq(appLikes.userId, userId))).returning();
+  if (!removed.length) await db.insert(appLikes).values({ appId, userId }).onConflictDoNothing();
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(appLikes).where(eq(appLikes.appId, appId));
+  return { liked: !removed.length, likes: n };
+}
+
+export async function likeState(appId: string, userId: string) {
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(appLikes).where(eq(appLikes.appId, appId));
+  const [mine] = await db.select().from(appLikes).where(and(eq(appLikes.appId, appId), eq(appLikes.userId, userId)));
+  return { likes: n, liked: !!mine };
+}
+
+export async function setListed(appId: string, userId: string, listed: boolean): Promise<boolean> {
+  const r = await db.update(apps).set({ listed }).where(and(eq(apps.id, appId), eq(apps.ownerId, userId))).returning({ id: apps.id });
+  return r.length > 0;
 }

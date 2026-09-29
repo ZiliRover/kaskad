@@ -221,6 +221,17 @@ const TOOLS: ModelSpec[] = [
     pricing: { type: "free" },
   },
   {
+    id: "kaskad/marketplace", kind: "image", group: "tools", name: "Под маркетплейс", vendor: "Каскад",
+    blurb: "Приводит картинку к правилам WB или Ozon: 3:4, 900×1200, JPG", featured: false, promptOptional: true,
+    caps: NO_CAPS,
+    inputs: [{ key: "image", dtype: "image", label: "Картинка", max: 1, min: 1 }],
+    params: [
+      enumParam("market", "Площадка", "wb", [["wb", "Wildberries"], ["ozon", "Ozon"]]),
+      enumParam("fill", "Если не 3:4", "blur", [["blur", "Дополнить размытым фоном"], ["crop", "Обрезать края"]]),
+    ],
+    pricing: { type: "free" },
+  },
+  {
     id: "kaskad/best-of", kind: "image", group: "tools", name: "Лучший вариант", vendor: "Каскад",
     blurb: "ИИ-арт-директор выбирает лучшую картинку, при нужде перегенерирует", featured: false, promptOptional: true,
     caps: NO_CAPS,

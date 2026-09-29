@@ -1195,3 +1195,11 @@ button.side-title:hover { color: var(--text-2); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 560px) { .director-options { grid-template-columns: 1fr; } }
 .result-note { font-size: 11.5px; line-height: 1.45; color: var(--text-2); padding: 2px 1px; }
+.seller-photo {
+  display: grid; place-items: center; height: 150px; border-radius: var(--r-ctl); border: 1.5px dashed var(--line-2);
+  color: var(--text-2); font-size: 13px; cursor: pointer; overflow: hidden; background: var(--panel-2);
+}
+.seller-photo:hover { border-color: var(--accent-line); color: var(--accent-strong); }
+.seller-photo.has-photo { border-style: solid; }
+.seller-photo img { width: 100%; height: 100%; object-fit: contain; }
+.agent-tabs { flex-wrap: wrap; }

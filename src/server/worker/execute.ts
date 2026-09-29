@@ -10,7 +10,7 @@ import { getProvider, providerMode, ProviderError } from "../providers";
 import { DEFAULT_CRITERIA, judge } from "../judge";
 import { asDataUrl, mimeForKey, newKey, putFile, readStored, signedFileUrl, storagePath } from "../storage";
 import {
-  addAudio, burnSubtitles, caption, montage, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
+  addAudio, burnSubtitles, caption, forMarketplace, montage, concatVideos, extractFrame, extractSpeech, reframe, speedVideo, trimVideo, wordsFromText,
   type CaptionStyle, type SubtitleStyle, type Word,
 } from "../tools";
 import { completeJob, failJob, heartbeat, isCanceled } from "./queue";
@@ -176,6 +176,10 @@ async function runTool(job: JobRow) {
       return out(await reframe(await one("video", "видео"), "video", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "video/mp4");
     case "kaskad/reframe-image":
       return out(await reframe(await one("image", "картинку"), "image", p("aspect"), p("fill") === "blur" ? "blur" : "crop"), "image/png");
+    case "kaskad/marketplace": {
+      const r = await forMarketplace(await one("image", "картинку"), p("market") === "ozon" ? "ozon" : "wb", p("fill") === "crop" ? "crop" : "blur");
+      return completeJob(job, [{ fileKey: await store(job, r.bytes, "image/jpeg"), mime: "image/jpeg", text: r.report }], 0);
+    }
     case "kaskad/best-of": {
       const criteria = (await resolveText(job, ports.prompt)) || DEFAULT_CRITERIA;
       // every candidate of every source: all variants of its latest run, or a batch item

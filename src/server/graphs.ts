@@ -280,3 +280,17 @@ export async function graphState(graphId: string): Promise<GraphState> {
   }
   return state;
 }
+
+/** Storage keys of everything a node made in its latest successful run, in item order. */
+export async function latestRunFiles(graphId: string, nodeId: string): Promise<string[]> {
+  const rows = await db.execute<{ file_key: string | null }>(sql`
+    with last as (
+      select run_id from jobs where graph_id = ${graphId} and node_id = ${nodeId} and status = 'succeeded'
+      order by created_at desc limit 1
+    )
+    select o.file_key from outputs o join jobs j on j.id = o.job_id
+    where j.run_id = (select run_id from last) and j.node_id = ${nodeId} and j.status = 'succeeded'
+    order by j.item nulls first, o.created_at
+  `);
+  return rows.map((r) => r.file_key).filter((k): k is string => !!k);
+}

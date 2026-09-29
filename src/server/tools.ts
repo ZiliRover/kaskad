@@ -410,3 +410,45 @@ export async function montage(clips: MontageClip[], fade: boolean): Promise<Uint
     return readFile(out);
   });
 }
+
+// ---------------------------------------------------------------- marketplaces
+
+/** What WB and Ozon accept for product photos (the stricter common ground). */
+const MARKET = {
+  wb: { name: "Wildberries", w: 900, h: 1200, maxBytes: 10 * 1024 * 1024 },
+  ozon: { name: "Ozon", w: 900, h: 1200, maxBytes: 10 * 1024 * 1024 },
+} as const;
+
+/**
+ * Brings an image to a marketplace's rules: 3:4, at least 900×1200, JPEG under the size
+ * limit. Returns the file and a short report of what changed.
+ */
+export async function forMarketplace(file: string, market: "wb" | "ozon", fill: "crop" | "blur"): Promise<{ bytes: Uint8Array; report: string }> {
+  const m = MARKET[market];
+  const { width, height } = await imageSize(file);
+  const r = width / height;
+  const target = 3 / 4;
+  const changes: string[] = [];
+  if (Math.abs(r - target) > 0.01) changes.push(fill === "crop" ? "обрезано до 3:4" : "дополнено до 3:4 размытым фоном");
+  // at least the minimum size; big sources keep their detail up to 1800×2400
+  const scale = Math.max(m.w / Math.min(width, height * target), 1);
+  const W = even(Math.min(1800, Math.max(m.w, Math.round(Math.min(width, height * target) * scale))));
+  const H = even(W / target);
+  if (W > width || H > height) changes.push("увеличено до допустимого размера");
+  const vf = reframeFilter(W, H, fill);
+  return withTmp(async (dir) => {
+    let q = 3; // ffmpeg mjpeg quality: 2 best .. 31 worst
+    for (;;) {
+      const out = path.join(dir, `card-${q}.jpg`);
+      await exec(FFMPEG, ["-v", "error", "-i", file, "-filter_complex", vf, "-frames:v", "1", "-update", "1", "-q:v", String(q), "-y", out]);
+      const bytes = await readFile(out);
+      if (bytes.length <= m.maxBytes || q >= 15) {
+        const kb = Math.round(bytes.length / 1024);
+        const report = `${m.name}: ${W}×${H}, JPG ${kb >= 1024 ? `${(kb / 1024).toFixed(1)} МБ` : `${kb} КБ`}. `
+          + (changes.length ? `Было ${width}×${height}: ${changes.join(", ")}.` : "Исходник уже подходил по пропорциям.");
+        return { bytes, report };
+      }
+      q += 3;
+    }
+  });
+}

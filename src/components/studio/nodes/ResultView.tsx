@@ -146,7 +146,12 @@ export function ResultView({ nodeId, kind, node, busy, aspect, pinnedId }: Props
               )}
             >Копировать</button>
           ) : out.url ? (
-            <a className="link-btn nodrag" href={`${out.url}?download`} download>Скачать</a>
+            <>
+              {batch.length > 1 && (
+                <a className="link-btn nodrag" href={`/api/graphs/${graphId}/zip?node=${encodeURIComponent(nodeId)}`} download>Скачать всё</a>
+              )}
+              <a className="link-btn nodrag" href={`${out.url}?download`} download>Скачать</a>
+            </>
           ) : null}
         </span>
       </div>

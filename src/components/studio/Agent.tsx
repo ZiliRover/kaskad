@@ -11,6 +11,7 @@ import { getModel } from "@/lib/models/registry";
 import { NodeIcon } from "./icons";
 import { authLost, useStudio } from "./store";
 import { iconFor, nodeLabel } from "./Templates";
+import { uploadFile } from "./upload";
 
 interface Proposal { title: string; summary: string; nodes: GraphNode[]; edges: GraphEdge[]; fixes: string[] }
 
@@ -25,6 +26,8 @@ const VOICES: [string, string][] = [
   ["Russian_ReliableMan", "Мужской, спокойный"], ["Russian_AttractiveGuy", "Мужской, обаятельный"],
   ["Russian_BrightHeroine", "Женский, яркий"], ["Russian_AmbitiousWoman", "Женский, уверенный"],
 ];
+
+interface CardsForm { marketplace: "wb" | "ozon"; slides: 5 | 7 | 10; style: string; photo: { key: string; url: string } | null }
 
 interface VideoForm { seconds: 15 | 30 | 60; aspect: "9:16" | "16:9" | "1:1"; voice: string; subtitles: boolean; music: boolean; quality: "draft" | "final" }
 
@@ -69,7 +72,9 @@ export function Agent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Proposal | null>(null);
-  const [mode, setMode] = useState<"graph" | "video">("graph");
+  const [mode, setMode] = useState<"graph" | "video" | "cards">("graph");
+  const [cards, setCards] = useState<CardsForm>({ marketplace: "wb", slides: 7, style: "", photo: null });
+  const [uploading, setUploading] = useState(false);
   const [video, setVideo] = useState<VideoForm>({ seconds: 15, aspect: "9:16", voice: VOICES[0][0], subtitles: true, music: false, quality: "draft" });
 
   useEffect(() => {
@@ -84,7 +89,12 @@ export function Agent() {
     try {
       const r = mode === "graph"
         ? await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ request }) })
-        : await fetch("/api/director", {
+        : mode === "cards"
+          ? await fetch("/api/seller", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ product: request, photoKey: cards.photo?.key, marketplace: cards.marketplace, slides: cards.slides, style: cards.style }),
+          })
+          : await fetch("/api/director", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idea: request, ...video, voice: video.voice || null }),
         });
@@ -125,6 +135,8 @@ export function Agent() {
                   disabled={busy || !!result} onClick={() => setMode("graph")}>Граф по описанию</button>
                 <button type="button" role="tab" aria-selected={mode === "video"} className={mode === "video" ? "is-on" : undefined}
                   disabled={busy || !!result} onClick={() => setMode("video")}>Ролик по идее</button>
+                <button type="button" role="tab" aria-selected={mode === "cards"} className={mode === "cards" ? "is-on" : undefined}
+                  disabled={busy || !!result} onClick={() => setMode("cards")}>Карточки товара</button>
               </div>
               <h2 id="agent-title" className="sr-only">Собрать граф</h2>
               <button type="button" className="icon-btn" aria-label="Закрыть" disabled={busy} onClick={() => setOpen(false)}>
@@ -138,11 +150,46 @@ export function Agent() {
                   className="field agent-input" rows={4} autoFocus maxLength={2000} disabled={busy}
                   placeholder={mode === "graph"
                     ? "Что нужно получить? Например: вертикальное видео с моим товаром, который вращается на подиуме"
-                    : "Идея ролика. Например: утро в маленькой кофейне, бариста готовит капучино, город просыпается"}
+                    : mode === "cards"
+                      ? "Что за товар: название, материал, размеры, главные преимущества, для кого"
+                      : "Идея ролика. Например: утро в маленькой кофейне, бариста готовит капучино, город просыпается"}
                   value={request} onChange={(e) => setRequest(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && request.trim().length >= 3) void build(); }}
                 />
-                {mode === "graph" ? (
+                {mode === "cards" ? (
+                  <div className="director-options">
+                    <div className="director-field">
+                      <span className="auth-label">Фото товара</span>
+                      <label className={`seller-photo${cards.photo ? " has-photo" : ""}`}>
+                        {cards.photo
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={cards.photo.url} alt="Фото товара" />
+                          : <span>{uploading ? "Загружаю…" : "Выбрать фото"}</span>}
+                        <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploading}
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!f) return;
+                            setUploading(true); setError(null);
+                            try { const u = await uploadFile(f); setCards((x) => ({ ...x, photo: { key: u.key, url: u.url } })); }
+                            catch (err) { setError((err as Error).message); }
+                            finally { setUploading(false); }
+                          }} />
+                      </label>
+                    </div>
+                    <div className="director-field">
+                      <Choice label="Площадка" value={cards.marketplace} options={[["wb", "Wildberries"], ["ozon", "Ozon"]]}
+                        onChange={(v) => setCards((x) => ({ ...x, marketplace: v as CardsForm["marketplace"] }))} />
+                      <Choice label="Слайдов" value={String(cards.slides)} options={[["5", "5"], ["7", "7"], ["10", "10"]]}
+                        onChange={(v) => setCards((x) => ({ ...x, slides: Number(v) as CardsForm["slides"] }))} />
+                      <label className="director-field">
+                        <span className="auth-label">Стиль (необязательно)</span>
+                        <input className="field" maxLength={300} value={cards.style} placeholder="минимализм, пастельные тона"
+                          onChange={(e) => setCards((x) => ({ ...x, style: e.target.value }))} />
+                      </label>
+                    </div>
+                  </div>
+                ) : mode === "graph" ? (
                   <div className="agent-examples">
                     {EXAMPLES.map((x) => (
                       <button key={x} type="button" className="chip" disabled={busy} onClick={() => setRequest(x)}>{x}</button>
@@ -171,9 +218,11 @@ export function Agent() {
                 <div className="dialog-actions">
                   <span className="agent-note">{mode === "graph"
                     ? "Агент подберёт модели и напишет промты. Ты увидишь граф и цену до запуска."
-                    : "Режиссёр напишет сценарий по сценам и соберёт весь ролик: кадры, видео, монтаж, голос, субтитры."}</span>
-                  <button type="submit" className="btn btn-primary" disabled={busy || request.trim().length < 3}>
-                    {busy ? (mode === "graph" ? "Собираю граф…" : "Пишу сценарий…") : "Собрать"}
+                    : mode === "cards"
+                      ? "Слайды в едином стиле по твоему фото: обложка, преимущества, размеры, применение. Сразу 900×1200 для площадки."
+                      : "Режиссёр напишет сценарий по сценам и соберёт весь ролик: кадры, видео, монтаж, голос, субтитры."}</span>
+                  <button type="submit" className="btn btn-primary" disabled={busy || request.trim().length < 3 || (mode === "cards" && !cards.photo)}>
+                    {busy ? (mode === "graph" ? "Собираю граф…" : mode === "cards" ? "Планирую слайды…" : "Пишу сценарий…") : "Собрать"}
                   </button>
                 </div>
               </form>

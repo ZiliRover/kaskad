@@ -8,7 +8,6 @@ import { canReadFile } from "./access";
 import { addHold, balanceKop, holdKop } from "./billing";
 import { db, jobs, outputs, runs } from "./db";
 import { getFx } from "./fx";
-import { saveGraph } from "./graphs";
 import { blockedVendors } from "./providers";
 
 export type CreateRunResult =
@@ -37,7 +36,8 @@ export async function createRun(
       }
     }
   }
-  await saveGraph(graphId, doc);
+  // the document is only planned here, never saved: saving goes through edits (ops),
+  // so a run can't overwrite what collaborators changed meanwhile
   const fx = await getFx();
 
   return db.transaction(async (tx) => {

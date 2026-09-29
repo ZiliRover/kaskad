@@ -82,6 +82,7 @@ export const outputs = pgTable("outputs", {
 ]);
 
 export type JobRow = typeof jobs.$inferSelect;
+export type GraphRow = typeof graphs.$inferSelect;
 export type OutputRow = typeof outputs.$inferSelect;
 
 // ---------------------------------------------------------------- accounts and money
@@ -199,5 +200,22 @@ export const uploads = pgTable("uploads", {
   kind: text("kind").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("uploads_owner_idx").on(t.ownerId, t.createdAt)]);
+/** People a project is shared with. The owner is graphs.owner_id, not listed here. */
+export const graphMembers = pgTable("graph_members", {
+  graphId: text("graph_id").notNull().references(() => graphs.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  /** editor: changes and runs (paying for own runs); viewer: looks */
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.graphId, t.userId] }), index("graph_members_user_idx").on(t.userId)]);
+
+/** Invitations for emails without an account yet; they turn into members on sign-in. */
+export const graphInvites = pgTable("graph_invites", {
+  graphId: text("graph_id").notNull().references(() => graphs.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.graphId, t.email] }), index("graph_invites_email_idx").on(t.email)]);
+
 export type UserRow = typeof users.$inferSelect;
 export type LedgerRow = typeof ledger.$inferSelect;

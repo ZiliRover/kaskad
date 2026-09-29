@@ -3,6 +3,10 @@ import { getModel } from "@/lib/models/registry";
 import { settleJob } from "../billing";
 import { db, type JobRow } from "../db";
 import { getFx } from "../fx";
+import { publish } from "../live";
+
+/** Tell everyone looking at the project that job states changed (they refetch). */
+const notify = (graphId: string) => { void publish(graphId, { t: "state" }).catch(() => {}); };
 
 const HEARTBEAT_STALE_SEC = 45;
 
@@ -52,7 +56,9 @@ export async function claimJob(): Promise<JobRow | null> {
     )
     returning *
   `);
-  return rows[0] ? toJob(rows[0]) : null;
+  const job = rows[0] ? toJob(rows[0]) : null;
+  if (job) notify(job.graphId);
+  return job;
 }
 
 export async function heartbeat(jobId: string, externalId?: string) {
@@ -92,6 +98,7 @@ export async function completeJob(
     // the hold goes back and the real cost is charged, in the same transaction as the result
     await settleJob(tx, job.id, costUsd, fx);
   });
+  notify(job.graphId);
 }
 
 /** A failed generation is free for the user: the hold is released, nothing is charged. */
@@ -106,6 +113,7 @@ export async function failJob(job: JobRow, error: string) {
     await settleJob(tx, job.id, null, null);
     await skipDependents(tx, job, "failed");
   });
+  notify(job.graphId);
 }
 
 export async function isCanceled(jobId: string): Promise<boolean> {
@@ -122,8 +130,11 @@ export async function cancelJob(jobId: string, userId: string): Promise<"cancele
     const rows = await tx.execute<RawJob>(sql`
       update jobs j set status = 'canceled', finished_at = now(), error = 'Отменено'
       from (select id, status as prev, external_id, estimate_usd from jobs where id = ${jobId} for update) old
-      where j.id = old.id and j.user_id = ${userId} and j.status in ('queued', 'running')
-      returning j.id, j.model_id, old.prev, old.external_id, old.estimate_usd
+      where j.id = old.id and j.status in ('queued', 'running')
+        and (j.user_id = ${userId}
+          or exists (select 1 from graphs g where g.id = j.graph_id and g.owner_id = ${userId}::text)
+          or exists (select 1 from graph_members m where m.graph_id = j.graph_id and m.user_id = ${userId} and m.role = 'editor'))
+      returning j.id, j.model_id, j.graph_id, old.prev, old.external_id, old.estimate_usd
     `);
     if (!rows.length) return "not-active" as const;
     const r = rows[0];
@@ -131,6 +142,7 @@ export async function cancelJob(jobId: string, userId: string): Promise<"cancele
     const billed = r.prev === "running" && r.external_id && r.estimate_usd !== null ? Number(r.estimate_usd) : null;
     await settleJob(tx, jobId, billed, billed ? await getFx() : null);
     await skipDependents(tx, { id: jobId, modelId: rows[0].model_id as string }, "canceled");
+    notify(rows[0].graph_id as string);
     return "canceled" as const;
   });
 }

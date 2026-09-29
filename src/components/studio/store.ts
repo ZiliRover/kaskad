@@ -7,6 +7,7 @@ import {
 import { create } from "zustand";
 import type { AssetData, GraphDoc, GroupData, ImageData, ListData, ModelData, NoteData, PromptData } from "@/lib/graph/types";
 import type { LibraryItem } from "@/lib/library";
+import type { Peer } from "./Live";
 import { planRun, type PlanResult } from "@/lib/graph/plan";
 import { liftInlinePrompts } from "@/lib/graph/lift";
 import { ACTIVE_STATUSES, type GraphState } from "@/lib/jobs";
@@ -66,6 +67,13 @@ export interface StudioStore {
   /** nodes shown side by side in the compare view; empty = closed */
   compareIds: string[];
   publishOpen: boolean;
+  /** your role in this project; viewers can't change or run it */
+  role: "owner" | "editor" | "viewer";
+  me: { id: string; email: string } | null;
+  /** other open tabs of this project, by client id */
+  peers: Record<string, Peer>;
+  /** bumps when comments change somewhere */
+  commentsRev: number;
   library: LibraryItem[];
   /** library item open in the editor ("new" = creating one) */
   libraryEdit: LibraryItem | "new" | null;
@@ -220,6 +228,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let saving: Promise<unknown> = Promise.resolve();
 
 function scheduleSave() {
+  if (useStudio.getState().role === "viewer") return; // nothing a viewer does is saved
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, 700);
 }
@@ -230,17 +239,105 @@ export function flushPendingSave(): Promise<unknown> {
   return saving;
 }
 
+/** This tab, as the live channel knows it: our own edits don't come back to us. */
+export const clientId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2);
+
+/**
+ * What the server has, node by node and wire by wire (as JSON). Saving sends only what
+ * differs from it, so collaborators editing other nodes never overwrite each other.
+ */
+const synced = { nodes: new Map<string, string>(), edges: new Map<string, string>() };
+
+/** JSON with sorted keys: the database reorders object keys, a plain stringify would see changes everywhere. */
+function stable(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+  if (v && typeof v === "object") {
+    return `{${Object.keys(v as object).filter((k) => (v as Record<string, unknown>)[k] !== undefined).sort()
+      .map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
+export function markSynced(doc: Pick<GraphDoc, "nodes" | "edges">, reset = false) {
+  if (reset) { synced.nodes.clear(); synced.edges.clear(); }
+  for (const n of doc.nodes) synced.nodes.set(n.id, stable(n));
+  for (const e of doc.edges) synced.edges.set(e.id, stable(e));
+}
+
+/** Local changes not yet on the server: a remote edit to such a node waits for ours. */
+export function isDirty(id: string): boolean {
+  const n = useStudio.getState().nodes.find((x) => x.id === id);
+  if (!n) return false;
+  return synced.nodes.get(id) !== stable(toDoc([n], [], { x: 0, y: 0, zoom: 1 }).nodes[0]);
+}
+
 function flushSave() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   const { graphId, nodes, edges, viewport } = useStudio.getState();
-  const body = JSON.stringify({ doc: toDoc(nodes, edges, viewport) });
+  const doc = toDoc(nodes, edges, viewport);
+  const ids = new Set(doc.nodes.map((n) => n.id)), eids = new Set(doc.edges.map((e) => e.id));
+  const ops = {
+    client: clientId,
+    nodes: doc.nodes.filter((n) => synced.nodes.get(n.id) !== stable(n)),
+    edges: doc.edges.filter((e) => synced.edges.get(e.id) !== stable(e)),
+    removeNodes: [...synced.nodes.keys()].filter((id) => !ids.has(id)),
+    removeEdges: [...synced.edges.keys()].filter((id) => !eids.has(id)),
+  };
+  if (!ops.nodes.length && !ops.edges.length && !ops.removeNodes.length && !ops.removeEdges.length) return saving;
+  // counted as synced right away, so a quick second edit sends only itself; a failure puts them back
+  const before = { nodes: new Map(synced.nodes), edges: new Map(synced.edges) };
+  for (const id of ops.removeNodes) synced.nodes.delete(id);
+  for (const id of ops.removeEdges) synced.edges.delete(id);
+  markSynced(ops);
+  const body = JSON.stringify(ops);
   // chain saves so an older one can never land after a newer one
   saving = saving.then(() =>
-    fetch(`/api/graphs/${graphId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body })
+    fetch(`/api/graphs/${graphId}/ops`, { method: "POST", headers: { "Content-Type": "application/json" }, body })
       .then((r) => { if (authLost(r)) return; if (!r.ok) throw new Error(); })
-      .catch(() => useStudio.getState().toast("Не удалось сохранить изменения. Проверьте соединение.", true)),
+      .catch(() => {
+        synced.nodes = before.nodes; synced.edges = before.edges;
+        useStudio.getState().toast("Не удалось сохранить изменения. Проверьте соединение.", true);
+      }),
   );
   return saving;
+}
+
+/** Someone else changed the project: take their nodes and wires, except ones we are editing right now. */
+export function applyRemote(ops: { nodes?: GraphDoc["nodes"]; edges?: GraphDoc["edges"]; removeNodes?: string[]; removeEdges?: string[] }) {
+  const s = useStudio.getState();
+  const upNodes = (ops.nodes ?? []).filter((n) => !isDirty(n.id));
+  const goneNodes = new Set(ops.removeNodes ?? []);
+  const goneEdges = new Set(ops.removeEdges ?? []);
+  const byId = new Map(s.nodes.map((n) => [n.id, n]));
+  for (const n of upNodes) {
+    const cur = byId.get(n.id);
+    byId.set(n.id, { ...present(n as StudioNode), selected: cur?.selected ?? false, measured: cur?.measured } as StudioNode);
+  }
+  for (const id of goneNodes) byId.delete(id);
+  const edges = new Map(s.edges.map((e) => [e.id, e]));
+  for (const e of ops.edges ?? []) edges.set(e.id, { ...e, className: edgeClass(e) });
+  for (const id of goneEdges) edges.delete(id);
+  const nodes = [...byId.values()];
+  const alive = new Set(nodes.map((n) => n.id));
+  useStudio.setState({ nodes, edges: [...edges.values()].filter((e) => alive.has(e.source) && alive.has(e.target)) });
+  markSynced({ nodes: upNodes, edges: ops.edges ?? [] });
+  for (const id of goneNodes) synced.nodes.delete(id);
+  for (const id of goneEdges) synced.edges.delete(id);
+}
+
+/** Too many changes for one message: fetch the whole document and take what we are not editing. */
+export async function reloadRemote() {
+  const { graphId } = useStudio.getState();
+  const r = await fetch(`/api/graphs/${graphId}`, { cache: "no-store" }).catch(() => null);
+  if (!r?.ok) return;
+  const d = await r.json();
+  const doc = d.doc as GraphDoc;
+  const keep = new Set(doc.nodes.map((n) => n.id)), keepE = new Set(doc.edges.map((e) => e.id));
+  applyRemote({
+    nodes: doc.nodes, edges: doc.edges,
+    removeNodes: [...synced.nodes.keys()].filter((id) => !keep.has(id) && !isDirty(id)),
+    removeEdges: [...synced.edges.keys()].filter((id) => !keepE.has(id)),
+  });
 }
 
 if (typeof window !== "undefined") {
@@ -267,7 +364,7 @@ export async function refreshState() {
   } catch { /* transient; next poll retries */ }
 }
 
-function ensurePolling() {
+export function ensurePolling() {
   if (pollTimer) return;
   const loop = async () => {
     await refreshState();
@@ -311,6 +408,10 @@ export const useStudio = create<StudioStore>((set, get) => ({
   billingOpen: false,
   compareIds: [],
   publishOpen: false,
+  role: "owner",
+  me: null,
+  peers: {},
+  commentsRev: 0,
   library: [],
   libraryEdit: null,
   libraryPrefill: null,
@@ -352,7 +453,11 @@ export const useStudio = create<StudioStore>((set, get) => ({
     set({ draft });
     const lifted = liftInlinePrompts(doc);
     const { nodes, edges } = fromDoc(lifted.doc);
-    set({ graphId, nodes, edges, viewport: doc.viewport ?? { x: 80, y: 80, zoom: 1 }, state, fx });
+    // everyone keeps their own view of a shared canvas
+    let viewport = doc.viewport ?? { x: 80, y: 80, zoom: 1 };
+    try { const v = localStorage.getItem(`kaskad-vp-${graphId}`); if (v) viewport = JSON.parse(v); } catch { /* default view */ }
+    markSynced(doc, true);
+    set({ graphId, nodes, edges, viewport, state, fx });
     if (lifted.changed) scheduleSave();
     if (Object.keys(state).some((id) => isActive(state, id))) ensurePolling();
   },
@@ -401,7 +506,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
 
   setViewport(v) {
     set({ viewport: v });
-    scheduleSave();
+    try { localStorage.setItem(`kaskad-vp-${get().graphId}`, JSON.stringify(v)); } catch { /* convenience only */ }
   },
 
   addNode(type, at, opts = {}) {
@@ -673,6 +778,7 @@ export const useStudio = create<StudioStore>((set, get) => ({
   },
 
   async run(targets, mode) {
+    if (get().role === "viewer") { get().toast("Только просмотр: запускать может владелец или редактор", true); return; }
     const { nodes, edges, viewport, state, graphId } = get();
     const doc = toDoc(nodes, edges, viewport);
     const plan: PlanResult = planRun({

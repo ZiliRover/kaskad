@@ -127,10 +127,10 @@ export function Projects({ currentId, initialName, initial }: { currentId: strin
                 ) : (
                   <button type="button" role="menuitem" className="projects-open" onClick={() => void (p.id === currentId ? setOpenMenu(false) : open(p.id))}>
                     <span className="projects-name">{p.name}</span>
-                    <span className="projects-meta">{nodesLabel(p.nodes)} · {ago(p.updatedAt)}</span>
+                    <span className="projects-meta">{p.role !== "owner" && p.ownerEmail ? `общий, от ${p.ownerEmail} · ` : ""}{nodesLabel(p.nodes)} · {ago(p.updatedAt)}</span>
                   </button>
                 )}
-                {editing !== p.id && (
+                {editing !== p.id && p.role === "owner" && (
                   <span className="projects-actions">
                     <button type="button" className="icon-btn" title="Переименовать" aria-label={`Переименовать «${p.name}»`}
                       onClick={() => { setEditing(p.id); setDraft(p.name); }}>

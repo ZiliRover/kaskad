@@ -32,6 +32,8 @@ interface Props {
   blockedVendors: string[];
   account: Account;
   projects: ProjectSummary[];
+  role: "owner" | "editor" | "viewer";
+  me: { id: string; email: string };
 }
 
 /** Back from the checkout (?payment=id): wait for the provider's confirmation, then say what happened. */
@@ -49,14 +51,14 @@ async function followPayment(id: string) {
   toast("Платёж ещё обрабатывается. Баланс обновится, как только банк его подтвердит.");
 }
 
-export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx, blockedVendors, account, projects }: Props) {
+export function Studio({ graphId, graphName, initialDoc, initialState, providerMode, fx, blockedVendors, account, projects, role, me }: Props) {
   // the store is a browser singleton: fill it on mount, never during server render
   const [ready, setReady] = useState(false);
   useEffect(() => {
     useStudio.getState().init(graphId, initialDoc, initialState, fx);
-    useStudio.setState({ blockedVendors, account });
+    useStudio.setState({ blockedVendors, account, role, me });
     setReady(true);
-  }, [graphId, initialDoc, initialState, fx, blockedVendors, account]);
+  }, [graphId, initialDoc, initialState, fx, blockedVendors, account, role, me]);
   useEffect(() => {
     const payment = new URLSearchParams(window.location.search).get("payment");
     if (payment) void followPayment(payment);

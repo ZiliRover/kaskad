@@ -9,6 +9,7 @@ import { getModel } from "@/lib/models/registry";
 import type { MediaKind } from "@/lib/models/types";
 import { canConnect, outputType, remember, useStudio, type StudioNode } from "./store";
 import { FlowEdge } from "./FlowEdge";
+import { LiveChannel, PeerCursors } from "./Live";
 import { useTheme } from "./theme";
 import { mediaFiles } from "./upload";
 import { GroupNode } from "./nodes/GroupNode";
@@ -166,6 +167,8 @@ export function Canvas() {
       connectionRadius={28}
       proOptions={{ hideAttribution: false }}
     >
+      <LiveChannel />
+      <PeerCursors />
       <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--grid-dot)" />
       <Controls showInteractive={false} position="bottom-left" />
       <MiniMap

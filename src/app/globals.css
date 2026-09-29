@@ -1284,3 +1284,27 @@ button.side-title:hover { color: var(--text-2); }
 .menu .projects-showcase:hover { background: var(--panel-3); color: var(--text); }
 .projects-app .icon-btn.is-on { color: var(--accent-strong); }
 .app-top a.btn { color: var(--text); text-decoration: none; }
+
+/* ---------------------------------------------------------------- sharing */
+
+.share-btn { gap: 6px; }
+.dialog.share { width: min(520px, calc(100vw - 32px)); gap: 12px; }
+.share-invite { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; }
+.share-invite .field { height: 36px; }
+.share-list { list-style: none; display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+.share-list li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.share-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.share-role { font-size: 12px; color: var(--text-3); }
+.avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+@media (max-width: 560px) { .share-invite { grid-template-columns: 1fr; } }
+
+/* presence */
+.peers { display: inline-flex; align-items: center; }
+.peer-avatar { width: 24px; height: 24px; font-size: 11px; border: 2px solid var(--bg); margin-left: -6px; }
+.peer-avatar:first-child { margin-left: 2px; }
+.peer-more { background: var(--panel-3); color: var(--text-2); }
+.peer-cursor { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1000; display: flex; align-items: flex-start; gap: 2px; transition: transform .12s linear; }
+.peer-name { margin-top: 14px; padding: 1px 6px; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; }

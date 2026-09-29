@@ -3,7 +3,7 @@ import { z } from "zod";
 import { graphDoc } from "@/lib/graph/types";
 import { isAdmin } from "@/server/admin";
 import { requireUser } from "@/server/auth";
-import { ownedGraph } from "@/server/graphs";
+import { canEdit, graphAccess } from "@/server/sharing";
 import { createRun } from "@/server/runs";
 
 const body = z.object({
@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Некорректный запрос" }, { status: 400 });
   const { graphId, doc, targets, mode, draft } = parsed.data;
-  if (!(await ownedGraph(graphId, user.id))) return NextResponse.json({ error: "Граф не найден" }, { status: 404 });
+  const access = await graphAccess(graphId, user.id);
+  if (!access) return NextResponse.json({ error: "Граф не найден" }, { status: 404 });
+  if (!canEdit(access.role)) return NextResponse.json({ error: "Только просмотр: запускать может владелец или редактор" }, { status: 403 });
 
   const r = await createRun(graphId, user.id, doc, targets, mode, isAdmin(user), !!draft);
   if (!r.ok) return NextResponse.json(r, { status: r.code === "funds" ? 402 : 422 });

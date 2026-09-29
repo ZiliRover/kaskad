@@ -9,6 +9,8 @@ import { formatKop, formatUsd } from "@/lib/money";
 import type { ProjectSummary } from "@/lib/projects";
 import { Agent } from "./Agent";
 import { Projects } from "./Projects";
+import { PeerAvatars } from "./Live";
+import { Share } from "./Share";
 import { isActive, useStudio } from "./store";
 import { useTheme, type ThemeMode } from "./theme";
 
@@ -92,6 +94,7 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
 }) {
   const run = useStudio((s) => s.run);
   const draft = useStudio((s) => s.draft);
+  const role = useStudio((s) => s.role);
   const setDraft = useStudio((s) => s.setDraft);
   const setPanel = useStudio((s) => s.setPanel);
   const galleryOpen = useStudio((s) => s.galleryOpen);
@@ -108,6 +111,9 @@ export function TopBar({ graphId, graphName, projects, providerMode }: {
         <span className="brand">{BRAND.name}</span>
         <span className="tb-sep" aria-hidden>/</span>
         <Projects currentId={graphId} initialName={graphName} initial={projects} />
+        <Share />
+        <PeerAvatars />
+        {role === "viewer" && <span className="badge" title="Тебя пригласили зрителем: изменения не сохраняются">Просмотр</span>}
       </div>
       <div className="tb-right">
         {providerMode === "mock" && (

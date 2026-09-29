@@ -67,11 +67,19 @@ export async function ownedGraph(id: string, userId: string) {
 
 /** The user's canvases, most recently edited first. */
 export async function listProjects(userId: string): Promise<ProjectSummary[]> {
-  const rows = await db.select({ id: graphs.id, name: graphs.name, updatedAt: graphs.updatedAt, doc: graphs.doc })
-    .from(graphs).where(and(eq(graphs.ownerId, userId), isNull(graphs.appId))).orderBy(desc(graphs.updatedAt));
+  const rows = await db.execute<{ id: string; name: string; updated_at: Date; doc: GraphDoc; role: string; owner_email: string | null }>(sql`
+    select g.id, g.name, g.updated_at, g.doc, 'owner' as role, null as owner_email
+    from graphs g where g.owner_id = ${userId} and g.app_id is null
+    union all
+    select g.id, g.name, g.updated_at, g.doc, m.role, u.email
+    from graph_members m join graphs g on g.id = m.graph_id left join users u on u.id::text = g.owner_id
+    where m.user_id = ${userId} and g.app_id is null
+    order by updated_at desc
+  `);
   return rows.map((r) => ({
-    id: r.id, name: r.name, updatedAt: r.updatedAt.toISOString(),
+    id: r.id, name: r.name, updatedAt: new Date(r.updated_at).toISOString(),
     nodes: r.doc.nodes.filter((n) => n.type !== "note" && n.type !== "group").length,
+    role: r.role as ProjectSummary["role"], ownerEmail: r.owner_email,
   }));
 }
 

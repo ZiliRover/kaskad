@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/server/auth";
-import { latestRunFiles, ownedGraph } from "@/server/graphs";
+import { latestRunFiles } from "@/server/graphs";
+import { graphAccess } from "@/server/sharing";
 import { readStored } from "@/server/storage";
 import { zip } from "@/server/zip";
 
@@ -10,7 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (deny) return deny;
   const { id } = await params;
   const node = new URL(req.url).searchParams.get("node") ?? "";
-  const graph = node && node.length <= 64 ? await ownedGraph(id, user.id) : null;
+  const graph = node && node.length <= 64 ? (await graphAccess(id, user.id))?.graph ?? null : null;
   if (!graph) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
   const files = await latestRunFiles(id, node);
   if (!files.length) return NextResponse.json({ error: "У ноды ещё нет результатов" }, { status: 404 });

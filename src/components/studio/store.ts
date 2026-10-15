@@ -34,7 +34,7 @@ export interface Account {
   availableKop: number;
   reservedKop: number;
   /** null: top-ups are switched off on this server */
-  payments: "test" | "yookassa" | null;
+  payments: "test" | "robokassa" | null;
   /** operator of the service (ADMIN_EMAILS) */
   admin: boolean;
   /** what is left on the OpenRouter account, operators only */

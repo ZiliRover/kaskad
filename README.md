@@ -30,7 +30,7 @@
 - **Every OpenRouter video and image model on one canvas.** 28 video models (Seedance, Veo, Kling, Sora, Wan, Hailuo, Runway…), 53 image models (Nano Banana, GPT Image, Seedream, FLUX, Recraft…) and a few text models for writing prompts.
 - **Nodes show exactly what a model accepts.** First and last frame, image references, video and audio references for Seedance 2, a source video for edit and upscale models. Required inputs are marked; wires only connect matching types.
 - **Price before you run, pay in rubles.** Every node shows its price in rubles at the daily Central Bank rate. A run reserves its estimate from the prepaid balance and is charged what the provider actually billed; failed generations cost nothing.
-- **Sign in with an email code.** No passwords. Every account has its own canvas, files and balance, tops up by card through YooKassa, and gets a welcome bonus to try things.
+- **Sign in with an email code.** No passwords. Every account has its own canvas, files and balance, tops up by card or SBP through Robokassa, and gets a welcome bonus to try things.
 - **From an idea to a finished video.** The Director writes a scene-by-scene script and builds the whole pipeline: frames, scene videos, a montage timeline (reorder, trim, fades), voice-over, music and Reels-style subtitles recognised from the speech.
 - **Marketplace card sets.** A product photo and a description become 5-10 slides in one style, fitted to Wildberries or Ozon (3:4, 900x1200, JPEG) and downloadable as one ZIP.
 - **Quality autopilot.** A vision model scores variants against your criteria, passes on the best one and regenerates when nothing clears the bar.
@@ -107,8 +107,9 @@ Requirements: Node.js 20+, and `ffmpeg`/`ffprobe` on `PATH` for the video tools.
 | `WELCOME_BONUS_RUB` | `50` | credited once to each new account |
 | `OVERLAY_FONT` / `OVERLAY_FONT_FAMILY` | system bold font | TTF with Cyrillic for text and subtitles, and its family name if it isn't Arial, Segoe UI or DejaVu Sans |
 | `SMTP_URL` / `MAIL_FROM` | | mail for login codes (`smtps://user:pass@host:465`); without it, dev prints codes to the console |
-| `PAYMENTS_PROVIDER` | `test` in dev | `yookassa` for real payments; webhook: `<APP_URL>/api/payments/webhook` |
-| `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY` | | YooKassa shop credentials |
+| `PAYMENTS_PROVIDER` | `test` in dev | `robokassa` for real payments (the test checkout never runs in production) |
+| `ROBOKASSA_LOGIN` / `ROBOKASSA_PASSWORD1` / `ROBOKASSA_PASSWORD2` | | shop credentials; Result URL `<APP_URL>/api/payments/robokassa/result`, Success/Fail URL `<APP_URL>/api/payments/robokassa/return` (Fail with `?failed=1`) |
+| `ROBOKASSA_TEST` / `ROBOKASSA_HASH` | `md5` | `1` = Robokassa test mode with the test passwords; hash algorithm as in the shop settings |
 | `APP_URL` | `PUBLIC_BASE_URL` | where the checkout returns the user |
 
 </details>
@@ -175,7 +176,7 @@ This is the core of the product. A live run on real models (GPT Image 2 → Seed
 - **Google models are blocked from Russia** ("Blocked by Google AI Studio"): Nano Banana, Veo and Gemini need a generation server abroad. Set `BLOCKED_VENDORS=google` meanwhile; OpenAI, Anthropic, ByteDance, Alibaba and others work.
 - **Seedance refuses frames that look like a real person** (provider privacy filter). The studio explains this on the node and suggests stylized frames or other models.
 - **Video and audio inputs need a public https server address.** Providers accept them only as links, not inline files; without `PUBLIC_BASE_URL` those runs stop before anything is billed.
-- **Payments are wired, not yet live.** YooKassa needs a shop (self-employed status works) and a public https address for the webhook; until then top-ups run through the test checkout. Receipts for "Мой налог" come from YooKassa's own integration.
+- **Payments are wired, not yet live.** Robokassa needs a shop (self-employed status works) and a public https address for its Result URL; until then top-ups are off in production. Receipts for "Мой налог" come from Robokassa's Robochecks: each payment carries a receipt line "Пополнение баланса сервиса Каскад".
 - **Reference limits for video models are estimates.** OpenRouter doesn't publish them; providers report an error on the node if a limit is exceeded.
 - **Marketplace cards, live:** 11 products (phone-style photos, one worn by a person), 77 slides on GPT Image 2: every slide rendered, Russian text clean, the product and the person kept across a set. A slide costs about $0.06 at provider prices (the reference photo is billed as ~3400 input tokens, now in the estimate); a set of 7 takes 2.5-5 minutes with four jobs at a time (`WORKER_CONCURRENCY`). The first run showed the planner inventing sizes and the image model adding its own labels; the planner now uses only facts from the description and forbids any other text on the image.
 - **Abuse limits are basic.** Login codes are limited per email and per IP, the welcome bonus is skipped for throwaway mail and after 3 accounts per IP in 30 days. The IP comes from `X-Forwarded-For`, so production needs a proxy that sets it.

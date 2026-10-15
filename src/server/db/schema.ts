@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, doublePrecision, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  bigint, bigserial, boolean, doublePrecision, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from "drizzle-orm/pg-core";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { AppField } from "@/lib/apps";
@@ -147,9 +147,11 @@ export const payments = pgTable("payments", {
   status: paymentStatus("status").notNull().default("pending"),
   externalId: text("external_id"),
   confirmationUrl: text("confirmation_url"),
+  /** numeric invoice number for providers that take only integers (Robokassa InvId) */
+  invId: bigserial("inv_id", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   paidAt: timestamp("paid_at", { withTimezone: true }),
-}, (t) => [index("payments_user_idx").on(t.userId, t.createdAt)]);
+}, (t) => [index("payments_user_idx").on(t.userId, t.createdAt), uniqueIndex("payments_inv_id_uq").on(t.invId)]);
 
 /**
  * A graph published as an app: a frozen copy of the graph, the inputs people fill in

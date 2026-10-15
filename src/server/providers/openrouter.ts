@@ -14,7 +14,9 @@ type Json = Record<string, any>;
  * trim: a .env saved with Windows line endings leaves a carriage return on the value.
  */
 export function apiKeySource(): { key: string; from: string } | null {
-  for (const name of ["KASKAD_OPENROUTER_KEY", "OPENROUTER_API_KEY"]) {
+  // production spends only its own (spend-limited) key, never a machine-wide one left by other tools
+  const names = process.env.NODE_ENV === "production" ? ["KASKAD_OPENROUTER_KEY"] : ["KASKAD_OPENROUTER_KEY", "OPENROUTER_API_KEY"];
+  for (const name of names) {
     const v = process.env[name]?.trim();
     if (v) return { key: v, from: name };
   }

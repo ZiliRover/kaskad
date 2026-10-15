@@ -37,9 +37,11 @@ interface Props {
 }
 
 /** Back from the checkout (?payment=id): wait for the provider's confirmation, then say what happened. */
-async function followPayment(id: string) {
+async function followPayment(id: string, failed: boolean) {
   const { toast, refreshBalance } = useStudio.getState();
   window.history.replaceState(null, "", window.location.pathname);
+  // the checkout sent the buyer back without paying: nothing to wait for
+  if (failed) { toast("Оплата не завершена, деньги не списаны"); return; }
   for (let i = 0; i < 15; i++) {
     const r = await fetch(`/api/payments/${id}`, { cache: "no-store" }).catch(() => null);
     const p = r?.ok ? await r.json() : null;
@@ -60,8 +62,9 @@ export function Studio({ graphId, graphName, initialDoc, initialState, providerM
     setReady(true);
   }, [graphId, initialDoc, initialState, fx, blockedVendors, account, role, me]);
   useEffect(() => {
-    const payment = new URLSearchParams(window.location.search).get("payment");
-    if (payment) void followPayment(payment);
+    const query = new URLSearchParams(window.location.search);
+    const payment = query.get("payment");
+    if (payment) void followPayment(payment, query.has("failed"));
     // "Пополнить" from pages outside the studio
     if (new URLSearchParams(window.location.search).get("topup")) {
       useStudio.getState().setPanel({ billingOpen: true });

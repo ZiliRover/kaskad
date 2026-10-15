@@ -7,6 +7,7 @@ import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { cache } from "react";
+import { isAdmin } from "./admin";
 import { grantWelcomeBonus } from "./billing";
 import { db, loginCodes, sessions, users, type UserRow } from "./db";
 import { mailConfigured, sendLoginCode } from "./mail";
@@ -44,7 +45,17 @@ export function normalizeEmail(raw: string): string | null {
 
 export type RequestCodeResult = { ok: true; devCode?: string } | { ok: false; error: string; status: number };
 
+/**
+ * SIGNUP_MODE=invite: only accounts the owner created (`npm run invite`) and operators
+ * from ADMIN_EMAILS may sign in. Default "open" lets anyone create an account.
+ */
+export const inviteOnly = () => process.env.SIGNUP_MODE?.trim().toLowerCase() === "invite";
+
 export async function requestCode(email: string, ip: string | null): Promise<RequestCodeResult> {
+  if (inviteOnly() && !isAdmin({ email })) {
+    const [known] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    if (!known) return { ok: false, status: 403, error: "Вход пока по приглашению. Напишите владельцу сервиса, чтобы он добавил вашу почту." };
+  }
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(loginCodes)
     .where(and(eq(loginCodes.email, email), gt(loginCodes.createdAt, sql`now() - interval '1 hour'`)));
   if (n >= CODES_PER_HOUR) return { ok: false, status: 429, error: "Слишком много кодов за час. Попробуйте позже." };

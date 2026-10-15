@@ -99,6 +99,13 @@
       "when": 1790696168363,
       "tag": "0013_protection",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792064237356,
+      "tag": "0014_robokassa",
+      "breakpoints": true
     }
   ]
 }

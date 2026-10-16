@@ -71,15 +71,49 @@ export function Billing() {
     }
   };
 
+  const head = (
+    <div className="templates-head">
+      <h2 id="billing-title" className="dialog-title">Баланс</h2>
+      <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>
+        <XIcon size={14} weight="bold" aria-hidden />
+      </button>
+    </div>
+  );
+
+  // the desktop app spends the person's own OpenRouter account: that is the whole balance
+  if (account.desktop) {
+    return (
+      <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+        <div className="dialog billing" role="dialog" aria-modal="true" aria-labelledby="billing-title">
+          {head}
+          <div className="billing-balance">
+            <span className="auth-label">OpenRouter</span>
+            <span className="billing-amount">
+              {account.providerUsd === null ? "—" : formatKop(Math.round(account.providerUsd * fx.usdRub) * 100)}
+            </span>
+            <span className="billing-reserved">
+              {account.providerUsd === null
+                ? "Не удалось получить баланс: проверьте интернет и ключ."
+                : `${formatUsd(account.providerUsd)} по курсу ЦБ.`}
+            </span>
+          </div>
+          <a className="btn btn-primary" href="https://openrouter.ai/settings/credits" target="_blank" rel="noreferrer">
+            Пополнить на OpenRouter
+          </a>
+          <p className="billing-hint">
+            Генерации оплачиваются с вашего ключа OpenRouter. Цены на нодах — как у провайдера, по курсу ЦБ.
+            Если генерация не удалась, провайдер её не списывает.
+          </p>
+          <a className="link-btn" href="/setup">Сменить ключ OpenRouter</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="dialog billing" role="dialog" aria-modal="true" aria-labelledby="billing-title">
-        <div className="templates-head">
-          <h2 id="billing-title" className="dialog-title">Баланс</h2>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={close}>
-            <XIcon size={14} weight="bold" aria-hidden />
-          </button>
-        </div>
+        {head}
 
         {account.admin && (
           <div className="billing-balance">

@@ -50,7 +50,9 @@ function AccountMenu() {
           className="btn btn-ghost balance-chip"
           title={account.providerUsd === null
             ? "Баланс OpenRouter недоступен (нет ключа или сети)"
-            : `${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ. Генерации администратора идут без лимита и не списываются с баланса сайта, цены на нодах показаны без наценки, как у провайдера. Этот баланс видят только администраторы.`}
+            : account.desktop
+              ? `${formatUsd(account.providerUsd)} на вашем счёте OpenRouter, по курсу ЦБ. Генерации оплачиваются с него, цены на нодах — как у провайдера.`
+              : `${formatUsd(account.providerUsd)} на счёте OpenRouter, по курсу ЦБ. Генерации администратора идут без лимита и не списываются с баланса сайта, цены на нодах показаны без наценки, как у провайдера. Этот баланс видят только администраторы.`}
           onClick={() => setPanel({ billingOpen: true })}
         >
           <WalletIcon size={15} aria-hidden />
@@ -67,7 +69,7 @@ function AccountMenu() {
           <WalletIcon size={15} aria-hidden />{formatKop(Math.max(0, account.availableKop))}
         </button>
       )}
-      <div className="enhance" ref={ref}>
+      {!account.desktop && <div className="enhance" ref={ref}>
         <button
           type="button" className="icon-btn tb-icon" aria-label="Аккаунт" aria-haspopup="menu" aria-expanded={open}
           title={account.email} onClick={() => setOpen((v) => !v)}
@@ -85,7 +87,7 @@ function AccountMenu() {
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </>
   );
 }

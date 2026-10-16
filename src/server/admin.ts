@@ -6,6 +6,8 @@ import type { UserRow } from "./db";
  * Nobody else ever sees the provider balance.
  */
 export function isAdmin(user: Pick<UserRow, "email">): boolean {
+  // the desktop app's only person pays the provider directly: no site balance to limit
+  if (process.env.KASKAD_DESKTOP === "1") return true;
   const list = process.env.ADMIN_EMAILS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) ?? [];
   return list.includes(user.email.toLowerCase());
 }

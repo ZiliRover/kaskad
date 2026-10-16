@@ -8,15 +8,17 @@ const TASKS = {
   empty: { from: "empty", name: "Новый проект", open: null },
 } as const;
 
+/** Relative: the server's own URL may say "localhost" behind a proxy or in the desktop app. */
+const go = (to: string) => new NextResponse(null, { status: 303, headers: { Location: to } });
+
 /** A task from the start screen: a fresh project set up for it (plain form post, no script needed). */
 export async function POST(req: Request) {
   const user = await currentUser();
-  const base = new URL(req.url);
-  if (!user) return NextResponse.redirect(new URL("/login", base), 303);
+  if (!user) return go("/login");
   const form = await req.formData().catch(() => null);
   const task = TASKS[String(form?.get("task")) as keyof typeof TASKS];
-  if (!task) return NextResponse.redirect(new URL("/studio", base), 303);
+  if (!task) return go("/studio");
   const project = await createProject(user.id, { name: task.name, from: task.from });
-  if (!project) return NextResponse.redirect(new URL("/studio", base), 303);
-  return NextResponse.redirect(new URL(`/studio/${project.id}${task.open ? `?open=${task.open}` : ""}`, base), 303);
+  if (!project) return go("/studio");
+  return go(`/studio/${project.id}${task.open ? `?open=${task.open}` : ""}`);
 }

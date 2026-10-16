@@ -15,8 +15,12 @@ const win = process.platform === "win32";
 const exe = (name: string) => (win ? `${name}.exe` : name);
 
 /** ASCII-only 8.3 form of an existing Windows folder (unchanged elsewhere or if already ASCII). */
+const shortCache = new Map<string, string>();
+
 export function shortPath(dir: string): string {
   if (!win || /^[\x00-\x7f]*$/.test(dir)) return dir;
+  const known = shortCache.get(dir);
+  if (known) return known;
   // the path travels in an env var (UTF-16 on Windows), so no codepage mangling
   const out = execFileSync("powershell", [
     "-NoProfile", "-NonInteractive", "-Command",
@@ -25,10 +29,13 @@ export function shortPath(dir: string): string {
   if (!out || !/^[\x00-\x7f]*$/.test(out)) {
     throw new Error(`no ASCII short path for ${dir}: enable 8.3 names or move the project to an ASCII-only folder`);
   }
+  shortCache.set(dir, out);
   return out;
 }
 
 export function binDir(): string {
+  // the desktop app ships the binaries next to itself
+  if (process.env.KASKAD_PG_BIN) return shortPath(process.env.KASKAD_PG_BIN);
   const require = createRequire(import.meta.url);
   const pkg = `@embedded-postgres/${win ? "windows" : process.platform}-${process.arch}`;
   // entry is <pkg>/dist/index.js; binaries live in <pkg>/native/bin
@@ -38,7 +45,8 @@ export function binDir(): string {
 
 export function dataDir(): string {
   // the parent exists, so it can be shortened even before initdb creates the folder
-  return path.join(shortPath(process.cwd()), ".pgdata");
+  // (the desktop app keeps the database in the person's profile, KASKAD_PG_PARENT)
+  return path.join(shortPath(process.env.KASKAD_PG_PARENT || process.cwd()), ".pgdata");
 }
 
 export function initCluster(user: string, password: string) {

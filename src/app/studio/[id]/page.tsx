@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Studio } from "@/components/studio/Studio";
 import { isAdmin } from "@/server/admin";
 import { currentUser } from "@/server/auth";
+import { isDesktop, requireDesktopKey } from "@/server/desktop";
 import { balanceKop, reservedKop } from "@/server/billing";
 import { getFx } from "@/server/fx";
 import { graphState, listProjects } from "@/server/graphs";
@@ -15,6 +16,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
   await connection(); // per-request: reads the session and the database
   const user = await currentUser();
   if (!user) redirect("/login");
+  requireDesktopKey();
   const { id } = await params;
   const admin = isAdmin(user);
   await acceptInvites(user.id, user.email);
@@ -40,7 +42,7 @@ export default async function StudioPage({ params }: { params: Promise<{ id: str
       me={{ id: user.id, email: user.email }}
       account={{
         email: user.email, availableKop: available, reservedKop: reserved, payments: paymentsProvider(),
-        admin, providerUsd,
+        admin, providerUsd, desktop: isDesktop(),
       }}
     />
   );

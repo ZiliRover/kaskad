@@ -6,6 +6,7 @@ import { BRAND } from "@/config/brand";
 import { isAdmin } from "@/server/admin";
 import { appInfo, appPrice, getApp, runnerGraphId } from "@/server/apps";
 import { currentUser } from "@/server/auth";
+import { requireDesktopKey } from "@/server/desktop";
 import { balanceKop } from "@/server/billing";
 import { getFx } from "@/server/fx";
 import { graphState } from "@/server/graphs";
@@ -24,6 +25,7 @@ export default async function AppPage({ params }: { params: Promise<{ id: string
   const { id } = await params;
   const user = await currentUser();
   if (!user) redirect(`/login?next=/app/${id}`);
+  requireDesktopKey();
   const app = UUID.test(id) ? await getApp(id) : null;
   if (!app) notFound();
 

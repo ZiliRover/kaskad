@@ -10,6 +10,7 @@ import { cache } from "react";
 import { isAdmin } from "./admin";
 import { grantWelcomeBonus } from "./billing";
 import { db, loginCodes, sessions, users, type UserRow } from "./db";
+import { DESKTOP_COOKIE, desktopTokenOk, desktopUser, isDesktop } from "./desktop";
 import { mailConfigured, sendLoginCode } from "./mail";
 
 export const SESSION_COOKIE = "kaskad_session";
@@ -52,6 +53,7 @@ export type RequestCodeResult = { ok: true; devCode?: string } | { ok: false; er
 export const inviteOnly = () => process.env.SIGNUP_MODE?.trim().toLowerCase() === "invite";
 
 export async function requestCode(email: string, ip: string | null): Promise<RequestCodeResult> {
+  if (isDesktop()) return { ok: false, status: 403, error: "В приложении Каскад вход не нужен: откройте его с ярлыка." };
   if (inviteOnly() && !isAdmin({ email })) {
     const [known] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (!known) return { ok: false, status: 403, error: "Вход пока по приглашению. Напишите владельцу сервиса, чтобы он добавил вашу почту." };
@@ -145,6 +147,7 @@ export async function endSession() {
 
 /** The signed-in user for this request, or null. Memoized per request. */
 export const currentUser = cache(async (): Promise<UserRow | null> => {
+  if (isDesktop()) return desktopTokenOk((await cookies()).get(DESKTOP_COOKIE)?.value) ? desktopUser() : null;
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || token.length > 100) return null;
   const [row] = await db.select({ user: users }).from(sessions)

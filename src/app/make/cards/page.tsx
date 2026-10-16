@@ -5,6 +5,7 @@ import { CardsMaker } from "@/components/app/CardsMaker";
 import { BRAND } from "@/config/brand";
 import { isAdmin } from "@/server/admin";
 import { currentUser } from "@/server/auth";
+import { requireDesktopKey } from "@/server/desktop";
 import { balanceKop } from "@/server/billing";
 import { cardsProgress } from "@/server/cards";
 import { getFx } from "@/server/fx";
@@ -18,6 +19,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
   await connection();
   const user = await currentUser();
   if (!user) redirect("/login?next=/make/cards");
+  requireDesktopKey();
   const admin = isAdmin(user);
   const { project } = await searchParams;
   const [fx, balance, progress] = await Promise.all([

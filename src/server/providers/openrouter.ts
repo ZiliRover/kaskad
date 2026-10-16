@@ -1,3 +1,4 @@
+import { desktopKey } from "../desktop-key";
 import {
   ProviderError, type ImageRequest, type Media, type Provider, type SpeechRequest, type TextRequest, type TranscribeResult, type VideoPoll, type VideoRequest,
 } from "./types";
@@ -14,6 +15,11 @@ type Json = Record<string, any>;
  * trim: a .env saved with Windows line endings leaves a carriage return on the value.
  */
 export function apiKeySource(): { key: string; from: string } | null {
+  // the desktop app: the person's own key from /setup, nothing else
+  if (process.env.KASKAD_DESKTOP === "1") {
+    const k = desktopKey();
+    return k ? { key: k, from: "desktop settings" } : null;
+  }
   // production spends only its own (spend-limited) key, never a machine-wide one left by other tools
   const names = process.env.NODE_ENV === "production" ? ["KASKAD_OPENROUTER_KEY"] : ["KASKAD_OPENROUTER_KEY", "OPENROUTER_API_KEY"];
   for (const name of names) {
@@ -25,7 +31,11 @@ export function apiKeySource(): { key: string; from: string } | null {
 
 function key(): string {
   const k = apiKeySource()?.key;
-  if (!k) throw new ProviderError("Сервер не настроен: нет ключа OpenRouter (KASKAD_OPENROUTER_KEY)");
+  if (!k) {
+    throw new ProviderError(process.env.KASKAD_DESKTOP === "1"
+      ? "Нет ключа OpenRouter: укажите его в разделе «Баланс» → «Сменить ключ»"
+      : "Сервер не настроен: нет ключа OpenRouter (KASKAD_OPENROUTER_KEY)");
+  }
   return k;
 }
 
@@ -361,22 +371,22 @@ async function transcribeCall(audio: Uint8Array): Promise<TranscribeResult> {
   return { words, costUsd: cost(d) };
 }
 
-const g = globalThis as unknown as { __orBalance?: { usd: number; at: number } };
+const g = globalThis as unknown as { __orBalance?: { usd: number; at: number; key: string } };
 
 /** What is left on the OpenRouter account (credits bought minus used), cached for a minute. */
 export async function accountBalanceUsd(): Promise<number | null> {
   const k = apiKeySource()?.key;
   if (!k) return null;
-  if (g.__orBalance && Date.now() - g.__orBalance.at < 60_000) return g.__orBalance.usd;
+  if (g.__orBalance && g.__orBalance.key === k && Date.now() - g.__orBalance.at < 60_000) return g.__orBalance.usd;
   try {
     const r = await fetch(`${BASE}/credits`, { headers: { Authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(5000), cache: "no-store" });
     if (!r.ok) return null;
     const d = (await r.json())?.data;
     const usd = Number(d?.total_credits) - Number(d?.total_usage);
     if (!Number.isFinite(usd)) return null;
-    g.__orBalance = { usd, at: Date.now() };
+    g.__orBalance = { usd, at: Date.now(), key: k };
     return usd;
   } catch {
-    return g.__orBalance?.usd ?? null;
+    return g.__orBalance?.key === k ? g.__orBalance.usd : null;
   }
 }

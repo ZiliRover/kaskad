@@ -11,7 +11,8 @@ export function Home({ projects, balanceKop, email, cardsKop }: {
   projects: ProjectSummary[];
   /** null for operators */
   balanceKop: number | null;
-  email: string;
+  /** null in the desktop app: one person, nothing to sign out of */
+  email: string | null;
   /** price of a 7-slide set */
   cardsKop: number;
 }) {
@@ -22,7 +23,7 @@ export function Home({ projects, balanceKop, email, cardsKop }: {
         <span className="app-top-right">
           <a className="link-btn" href="/showcase">Витрина работ</a>
           {balanceKop !== null && <a className="btn btn-ghost btn-sm" href="/studio?topup=1" title="Пополнить">Баланс {formatKop(Math.max(0, balanceKop))}</a>}
-          <span className="home-email" title={email}>{email}</span>
+          {email && <span className="home-email" title={email}>{email}</span>}
         </span>
       </header>
 

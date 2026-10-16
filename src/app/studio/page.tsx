@@ -4,6 +4,7 @@ import { Home } from "@/components/app/Home";
 import { toKop } from "@/lib/money";
 import { isAdmin } from "@/server/admin";
 import { currentUser } from "@/server/auth";
+import { isDesktop, requireDesktopKey } from "@/server/desktop";
 import { balanceKop } from "@/server/billing";
 import { getFx } from "@/server/fx";
 import { listProjects, userGraph } from "@/server/graphs";
@@ -19,6 +20,7 @@ export default async function StudioIndex({ searchParams }: { searchParams: Prom
   await connection();
   const user = await currentUser();
   if (!user) redirect("/login");
+  requireDesktopKey();
   await acceptInvites(user.id, user.email);
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(await searchParams)) if (typeof v === "string") q.set(k, v);
@@ -30,7 +32,7 @@ export default async function StudioIndex({ searchParams }: { searchParams: Prom
     <Home
       projects={projects}
       balanceKop={admin ? null : balance}
-      email={user.email}
+      email={isDesktop() ? null : user.email}
       cardsKop={toKop(slidePriceUsd().usd * 7, admin ? { ...fx, markup: 1 } : fx)}
     />
   );

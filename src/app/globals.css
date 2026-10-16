@@ -863,6 +863,7 @@ button.side-title:hover { color: var(--text-2); }
 .billing-custom .field { height: 32px; padding-right: 24px; font-variant-numeric: tabular-nums; }
 .billing-custom span { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .billing-hint { color: var(--text-3); font-size: 12px; line-height: 1.45; }
+.billing a.btn { text-decoration: none; }
 .billing-history { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .billing-history ul { list-style: none; display: flex; flex-direction: column; }
 .billing-history li {

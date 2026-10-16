@@ -17,3 +17,7 @@ prototype/installer/
 prototype/web/outputs/
 prototype/settings.json
 __pycache__/
+
+# desktop app build output and downloaded binaries
+build/
+desktop/vendor/

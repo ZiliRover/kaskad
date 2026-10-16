@@ -39,6 +39,8 @@ export interface Account {
   admin: boolean;
   /** what is left on the OpenRouter account, operators only */
   providerUsd: number | null;
+  /** the desktop app: one person on their own OpenRouter key, no sign-in, no site balance */
+  desktop: boolean;
 }
 
 export interface ConfirmRequest { title: string; body: string; confirm: string; resolve: (ok: boolean) => void }

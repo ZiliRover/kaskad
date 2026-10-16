@@ -47,6 +47,13 @@
 - **Editing without an editor.** Free ffmpeg tools: montage timeline, last frame, join, trim, speed, sound on video, reframe to 9:16 / 3:4 / 1:1, text over images and videos, marketplace fitting; subtitles from speech (Whisper).
 - **A studio, not a demo.** Projects, templates, a results gallery you can drag back onto the canvas, prompt improvement and translation, notes and groups, copy/paste, undo for deletions, drop or paste files from your computer.
 
+
+## Windows app
+
+Download `Kaskad-Setup-<version>.exe` from [Releases](https://github.com/ZiliRover/kaskad/releases), run it, and Kaskad opens in your browser: no sign-in, everything stays on your computer (`%APPDATA%Kaskad`). On first start it asks for your own [OpenRouter key](https://openrouter.ai/keys); generations are paid from that account, and prices are shown in rubles at the Central Bank rate, as the provider charges them. A tray icon reopens Kaskad or quits it. The installer isn't code-signed yet, so Windows SmartScreen asks to confirm ("More info" → "Run anyway").
+
+Build it yourself: `npm run desktop:ffmpeg` once, then `npm run desktop:build` → `build/desktop/dist`. The build never reads `.env`.
+
 ## Why it's built this way
 
 | | |

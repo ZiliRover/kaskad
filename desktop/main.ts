@@ -11,14 +11,14 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { app, BrowserWindow, dialog, Menu, nativeImage, shell, Tray } from "electron";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
-import { clusterExists, initCluster, startServer, stopServer } from "../scripts/pg-local";
+import { clusterComplete, dataDir, initClusterAsync, shortPath, startServer, stopServer } from "../scripts/pg-local";
 
 const PREFERRED_PORT = 47790;
 const DB_NAME = "kaskad";
@@ -82,14 +82,45 @@ function pipeLog(name: string, p: ChildProcess) {
   p.stderr?.on("data", (d) => log(`[${name}] ${d}`));
 }
 
+/**
+ * Postgres processes of this install left by a crash or a killed launch. We hold the
+ * single-instance lock, so anything running from our binaries is an orphan.
+ */
+function killOrphans(): Promise<void> {
+  const script =
+    "$dirs = @($env:KASKAD_BIN_LONG, $env:KASKAD_BIN_SHORT) | ForEach-Object { $_.ToLower().Replace('/', '\\') };" +
+    "Get-CimInstance Win32_Process | Where-Object { $_.Name -in 'postgres.exe','initdb.exe','pg_ctl.exe' } | Where-Object {" +
+    " $p = (($_.ExecutablePath, $_.CommandLine) -join ' ').ToLower().Replace('/', '\\'); ($dirs | Where-Object { $p.Contains($_) }).Count -gt 0" +
+    "} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
+  const long = path.join(RES, "pg", "bin");
+  return new Promise((resolve) => {
+    const p = spawn("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      windowsHide: true, stdio: "ignore", env: { ...process.env, KASKAD_BIN_LONG: long, KASKAD_BIN_SHORT: shortPath(long) },
+    });
+    p.on("exit", () => resolve());
+    p.on("error", () => resolve());
+  });
+}
+
 async function startDatabase(password: string): Promise<string> {
   process.env.KASKAD_PG_BIN = path.join(RES, "pg", "bin");
   process.env.KASKAD_PG_PARENT = DATA;
-  if (!clusterExists()) {
-    setSplash("Первый запуск: готовим базу данных…");
-    initCluster("postgres", password);
+  await killOrphans();
+  const dir = dataDir();
+  if (!clusterComplete(dir)) {
+    // never-finished init (nothing was ever stored there): start over, keep the remains aside
+    if (existsSync(dir)) {
+      rmSync(`${dir}-incomplete`, { recursive: true, force: true });
+      renameSync(dir, `${dir}-incomplete`);
+    }
+    setSplash("Первый запуск: готовим базу данных. Это может занять пару минут…");
+    // build it under another name and rename at the end: .pgdata is either whole or absent
+    const fresh = dataDir(".pgdata-init");
+    rmSync(fresh, { recursive: true, force: true });
+    await initClusterAsync("postgres", password, fresh, (l) => log(`[initdb] ${l}`));
+    renameSync(fresh, dir);
+    setSplash("Запускаем Каскад…");
   }
-  stopServer(); // a database left running by a crash or a killed process
   const port = await freePort(0);
   pg = startServer(port, (l) => log(`[pg] ${l}`));
   pg.on("exit", (code) => { if (!quitting) fail(new Error(`база данных остановилась (код ${code})`)); });
@@ -197,7 +228,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // the shortcut clicked again: Kaskad is already running, just show it
-  app.on("second-instance", () => openInBrowser());
+  app.on("second-instance", () => { if (url) openInBrowser(); else splash?.focus(); });
   app.on("window-all-closed", () => { /* no windows by design: keep running in the tray */ });
   app.on("before-quit", stopAll);
   app.whenReady().then(() => {

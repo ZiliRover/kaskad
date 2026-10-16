@@ -43,10 +43,35 @@ export function binDir(): string {
   return shortPath(dir);
 }
 
-export function dataDir(): string {
+export function dataDir(name = ".pgdata"): string {
   // the parent exists, so it can be shortened even before initdb creates the folder
   // (the desktop app keeps the database in the person's profile, KASKAD_PG_PARENT)
-  return path.join(shortPath(process.env.KASKAD_PG_PARENT || process.cwd()), ".pgdata");
+  return path.join(shortPath(process.env.KASKAD_PG_PARENT || process.cwd()), name);
+}
+
+/** initdb writes pg_control last: without it the folder is an interrupted init, not a database. */
+export const clusterComplete = (dir = dataDir()) =>
+  existsSync(path.join(dir, "PG_VERSION")) && existsSync(path.join(dir, "global", "pg_control"));
+
+/**
+ * initdb without blocking the caller (the desktop launcher's UI must stay alive: the first
+ * run after install can take minutes while antivirus scans the fresh binaries).
+ */
+export async function initClusterAsync(user: string, password: string, dir: string, onLog?: (line: string) => void) {
+  const tmp = mkdtempSync(path.join(tmpdir(), "pgpw-"));
+  const pwfile = path.join(tmp, "pw");
+  writeFileSync(pwfile, password);
+  try {
+    const p = spawn(path.join(binDir(), exe("initdb")), [
+      "-D", dir, `--username=${user}`, `--pwfile=${pwfile}`, "--auth=password", "--encoding=UTF8", "--locale=C",
+    ], { windowsHide: true });
+    p.stdout?.on("data", (d) => onLog?.(String(d)));
+    p.stderr?.on("data", (d) => onLog?.(String(d)));
+    const code = await new Promise<number | null>((resolve, reject) => { p.on("error", reject); p.on("exit", resolve); });
+    if (code !== 0) throw new Error(`initdb завершился с кодом ${code}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 export function initCluster(user: string, password: string) {
